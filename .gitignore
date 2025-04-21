@@ -3,3 +3,4 @@ DESIGN.md
 MOVEGEN.txt
 build/
 build-*/
+*.swp
