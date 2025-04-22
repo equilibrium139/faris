@@ -180,6 +180,56 @@ std::vector<Board> genMoves(const Board& board, bool whiteTurn) {
                 }
             }
         }
+        const Bitboard rooks = board.whiteRooks;
+        for (int squareIndex = 0; squareIndex < 64; squareIndex++) {
+            Bitboard squareIndexBB = (Bitboard)1 << squareIndex;
+            if (squareIndexBB & rooks) { 
+                int rookMoves[4] = { 8, -8, 1, -1 };
+                for (int i = 0; i < 4; i++) {
+                    int newSquareIndex = squareIndex;
+                    int prevFile = squareIndex % 8;
+                    int prevRank = squareIndex / 8;
+                    while (true) {
+                        newSquareIndex += rookMoves[i];
+                        int newFile = newSquareIndex % 8;
+                        int newRank = newSquareIndex / 8;
+                        bool validMove = std::abs(newFile - prevFile) == 0 || std::abs(newRank - prevRank) == 0;
+                        validMove &= newSquareIndex < 64 && newSquareIndex >= 0;
+                        prevFile = newFile;
+                        prevRank = newRank;
+                        if (!validMove) break;
+                        Bitboard newSquareBB = (Bitboard)1 << newSquareIndex;
+                        if ((occupancy & newSquareBB) == 0) { 
+                            Board newBoard = board;
+                            newBoard.whiteRooks &= ~squareIndexBB; 
+                            newBoard.whiteRooks |= newSquareBB; 
+                            moves.push_back(newBoard);
+                        } else if (enemyOccupancy & newSquareBB) { 
+                            Board newBoard = board;
+                            newBoard.whiteRooks &= ~squareIndexBB; 
+                            newBoard.whiteRooks |= newSquareBB; 
+                            if (board.blackPawns & newSquareBB) {
+                                newBoard.blackPawns &= ~newSquareBB;
+                            } else if (board.blackKnights & newSquareBB) {
+                                newBoard.blackKnights &= ~newSquareBB;
+                            } else if (board.blackBishops & newSquareBB) {
+                                newBoard.blackBishops &= ~newSquareBB;
+                            } else if (board.blackRooks & newSquareBB) {
+                                newBoard.blackRooks &= ~newSquareBB;
+                            } else if (board.blackQueen & newSquareBB) {
+                                newBoard.blackQueen &= ~newSquareBB;
+                            } else if (board.blackKing & newSquareBB) {
+                                newBoard.blackKing &= ~newSquareBB;
+                            }
+                            moves.push_back(newBoard);
+                            break;
+                        } else { 
+                            break; 
+                        }
+                    }
+                }
+            }
+        }
     }    
     return moves;
 }
