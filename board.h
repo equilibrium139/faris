@@ -21,7 +21,7 @@ struct Board {
         std::uint64_t whiteKnights;
         std::uint64_t whiteBishops;
         std::uint64_t whiteRooks;
-        std::uint64_t whiteQueen;
+        std::uint64_t whiteQueens;
         std::uint64_t whiteKing;
         std::uint64_t blackPawns;
         std::uint64_t blackKnights;
@@ -31,7 +31,7 @@ struct Board {
         std::uint64_t blackKing;
         
         std::uint64_t whitePieces() const {
-            return whitePawns | whiteKnights | whiteBishops | whiteRooks | whiteQueen | whiteKing;
+            return whitePawns | whiteKnights | whiteBishops | whiteRooks | whiteQueens | whiteKing;
         }
 
         std::uint64_t blackPieces() const {
@@ -51,7 +51,7 @@ struct Board {
             whiteKnights = WN_START;
             whiteBishops = WB_START;
             whiteRooks = WR_START;
-            whiteQueen = WQ_START;
+            whiteQueens = WQ_START;
             whiteKing = WK_START;
             blackPawns = BP_START;
             blackKnights = BN_START;
