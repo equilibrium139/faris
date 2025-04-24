@@ -4,3 +4,4 @@ MOVEGEN.txt
 build/
 build-*/
 *.swp
+.vscode/

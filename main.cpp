@@ -1,7 +1,7 @@
-#include <iostream>
 #include "board.h"
 #include "movegen.h"
 #include "utilities.h"
+#include <iostream>
 
 int main() {
     Board board;
@@ -9,5 +9,5 @@ int main() {
     prettyPrint(board.allPieces());
     std::vector<Board> moves = genMoves(board, true);
     std::cout << "Number of moves: " << moves.size() << '\n';
-    return 0; 
+    return 0;
 }

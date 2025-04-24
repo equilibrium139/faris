@@ -1,17 +1,17 @@
 #include "movegen.h"
 #include <cmath>
 
-// TODO: take into account castling, en passant, promotion, check, checkmate, stalemate, draw.
+// TODO: take into account castling, en passant, promotion, check, checkmate,
+// stalemate, draw.
 
-void perftest(const Board& board, int& countLeafNodes, int depth) {
+void perftest(const Board &board, int &countLeafNodes, int depth) {
     if (depth == 0) {
         countLeafNodes++;
         return;
     }
-
 }
 
-std::vector<Board> genMoves(const Board& board, bool whiteTurn) {
+std::vector<Board> genMoves(const Board &board, bool whiteTurn) {
     std::vector<Board> moves;
     // assuming whiteTurn is true for now
     if (whiteTurn) {
@@ -20,23 +20,35 @@ std::vector<Board> genMoves(const Board& board, bool whiteTurn) {
         const Bitboard enemyOccupancy = board.blackPieces();
         for (int squareIndex = 0; squareIndex < 64; squareIndex++) {
             Bitboard squareIndexBB = (Bitboard)1 << squareIndex;
-            if (squareIndexBB & pawns) { // we have a pawn at squareIndex 
+            if (squareIndexBB & pawns) { // we have a pawn at squareIndex
                 int oneSquareForwardIndex = squareIndex + 8;
-                Bitboard oneSquareForwardBB = (Bitboard)1 << oneSquareForwardIndex;
-                if ((occupancy & oneSquareForwardBB) == 0) { // pawn can move one square forward
+                Bitboard oneSquareForwardBB = (Bitboard)1
+                                              << oneSquareForwardIndex;
+                if ((occupancy & oneSquareForwardBB) ==
+                    0) { // pawn can move one square forward
                     Board newBoard = board;
-                    newBoard.whitePawns &= ~squareIndexBB;  // zero out original square
-                    newBoard.whitePawns |= oneSquareForwardIndex; // 1 where destination square is
+                    newBoard.whitePawns &=
+                        ~squareIndexBB; // zero out original square
+                    newBoard.whitePawns |=
+                        oneSquareForwardIndex; // 1 where destination square is
                     moves.push_back(newBoard);
                 }
-                int twoSquaresForwardIndex = oneSquareForwardIndex + 8;
-                Bitboard twoSquaresForwardBB = (Bitboard)1 << twoSquaresForwardIndex;
-                if ((occupancy & twoSquaresForwardBB) == 0) {
-                    Board newBoard = board;
-                    newBoard.whitePawns &= ~squareIndexBB;  // zero out original square
-                    newBoard.whitePawns |= twoSquaresForwardBB; // 1 where destination square is
-                    moves.push_back(newBoard);
-                } 
+                int rank = squareIndex / 8;
+                if (rank ==
+                    1) { // pawn is on starting rank, can move 2 squares forward
+                    int twoSquaresForwardIndex = oneSquareForwardIndex + 8;
+                    Bitboard twoSquaresForwardBB = (Bitboard)1
+                                                   << twoSquaresForwardIndex;
+                    if ((occupancy & twoSquaresForwardBB) == 0) {
+                        Board newBoard = board;
+                        newBoard.whitePawns &=
+                            ~squareIndexBB; // zero out original square
+                        newBoard.whitePawns |=
+                            twoSquaresForwardBB; // 1 where destination square
+                                                 // is
+                        moves.push_back(newBoard);
+                    }
+                }
                 int file = squareIndex % 8;
                 if (file > 0) { // left diagonal exists
                     int leftDiagIndex = oneSquareForwardIndex - 1;
@@ -87,32 +99,34 @@ std::vector<Board> genMoves(const Board& board, bool whiteTurn) {
                     }
                 }
             }
-        }        
+        }
         const Bitboard knights = board.whiteKnights;
         for (int squareIndex = 0; squareIndex < 64; squareIndex++) {
             Bitboard squareIndexBB = (Bitboard)1 << squareIndex;
-            if (squareIndexBB & knights) { 
+            if (squareIndexBB & knights) {
                 int file = squareIndex % 8;
                 int rank = squareIndex / 8;
-                int knightMoves[8] = { 6, 10, 15, 17, -6, -10, -15, -17 };
+                int knightMoves[8] = {6, 10, 15, 17, -6, -10, -15, -17};
                 for (int i = 0; i < 8; i++) {
                     int newSquareIndex = squareIndex + knightMoves[i];
                     int newFile = newSquareIndex % 8;
                     int newRank = newSquareIndex / 8;
-                    bool validMove = std::abs(newFile - file) == 1 && std::abs(newRank - rank) == 2 ||
-                                     std::abs(newFile - file) == 2 && std::abs(newRank - rank) == 1;
+                    bool validMove = std::abs(newFile - file) == 1 &&
+                                         std::abs(newRank - rank) == 2 ||
+                                     std::abs(newFile - file) == 2 &&
+                                         std::abs(newRank - rank) == 1;
                     validMove &= newSquareIndex < 64 && newSquareIndex >= 0;
                     if (validMove) {
                         Bitboard newSquareBB = (Bitboard)1 << newSquareIndex;
-                        if ((occupancy & newSquareBB) == 0) { 
+                        if ((occupancy & newSquareBB) == 0) {
                             Board newBoard = board;
-                            newBoard.whiteKnights &= ~squareIndexBB; 
-                            newBoard.whiteKnights |= newSquareBB; 
+                            newBoard.whiteKnights &= ~squareIndexBB;
+                            newBoard.whiteKnights |= newSquareBB;
                             moves.push_back(newBoard);
-                        } else if (enemyOccupancy & newSquareBB) { 
+                        } else if (enemyOccupancy & newSquareBB) {
                             Board newBoard = board;
-                            newBoard.whiteKnights &= ~squareIndexBB; 
-                            newBoard.whiteKnights |= newSquareBB; 
+                            newBoard.whiteKnights &= ~squareIndexBB;
+                            newBoard.whiteKnights |= newSquareBB;
                             if (board.blackPawns & newSquareBB) {
                                 newBoard.blackPawns &= ~newSquareBB;
                             } else if (board.blackKnights & newSquareBB) {
@@ -135,8 +149,8 @@ std::vector<Board> genMoves(const Board& board, bool whiteTurn) {
         const Bitboard bishops = board.whiteBishops;
         for (int squareIndex = 0; squareIndex < 64; squareIndex++) {
             Bitboard squareIndexBB = (Bitboard)1 << squareIndex;
-            if (squareIndexBB & bishops) { 
-                int bishopMoves[4] = { 7, 9, -7, -9 };
+            if (squareIndexBB & bishops) {
+                int bishopMoves[4] = {7, 9, -7, -9};
                 for (int i = 0; i < 4; i++) {
                     int newSquareIndex = squareIndex;
                     int prevFile = squareIndex % 8;
@@ -145,21 +159,23 @@ std::vector<Board> genMoves(const Board& board, bool whiteTurn) {
                         newSquareIndex += bishopMoves[i];
                         int newFile = newSquareIndex % 8;
                         int newRank = newSquareIndex / 8;
-                        bool validMove = std::abs(newFile - prevFile) == std::abs(newRank - prevRank);
+                        bool validMove = std::abs(newFile - prevFile) ==
+                                         std::abs(newRank - prevRank);
                         validMove &= newSquareIndex < 64 && newSquareIndex >= 0;
                         prevFile = newFile;
                         prevRank = newRank;
-                        if (!validMove) break;
+                        if (!validMove)
+                            break;
                         Bitboard newSquareBB = (Bitboard)1 << newSquareIndex;
-                        if ((occupancy & newSquareBB) == 0) { 
+                        if ((occupancy & newSquareBB) == 0) {
                             Board newBoard = board;
-                            newBoard.whiteBishops &= ~squareIndexBB; 
-                            newBoard.whiteBishops |= newSquareBB; 
+                            newBoard.whiteBishops &= ~squareIndexBB;
+                            newBoard.whiteBishops |= newSquareBB;
                             moves.push_back(newBoard);
-                        } else if (enemyOccupancy & newSquareBB) { 
+                        } else if (enemyOccupancy & newSquareBB) {
                             Board newBoard = board;
-                            newBoard.whiteBishops &= ~squareIndexBB; 
-                            newBoard.whiteBishops |= newSquareBB; 
+                            newBoard.whiteBishops &= ~squareIndexBB;
+                            newBoard.whiteBishops |= newSquareBB;
                             if (board.blackPawns & newSquareBB) {
                                 newBoard.blackPawns &= ~newSquareBB;
                             } else if (board.blackKnights & newSquareBB) {
@@ -174,9 +190,9 @@ std::vector<Board> genMoves(const Board& board, bool whiteTurn) {
                                 newBoard.blackKing &= ~newSquareBB;
                             }
                             moves.push_back(newBoard);
-                            break; 
+                            break;
                         } else { // friendly piece at destination
-                            break; 
+                            break;
                         }
                     }
                 }
@@ -185,31 +201,34 @@ std::vector<Board> genMoves(const Board& board, bool whiteTurn) {
         const Bitboard rooks = board.whiteRooks;
         for (int squareIndex = 0; squareIndex < 64; squareIndex++) {
             Bitboard squareIndexBB = (Bitboard)1 << squareIndex;
-            if (squareIndexBB & rooks) { 
-                int rookMoves[4] = { 8, -8, 1, -1 };
+            if (squareIndexBB & rooks) {
+                int rookMoves[4] = {8, -8, 1, -1};
                 for (int i = 0; i < 4; i++) {
                     int newSquareIndex = squareIndex;
                     int prevFile = squareIndex % 8;
                     int prevRank = squareIndex / 8;
                     while (true) {
                         newSquareIndex += rookMoves[i];
+                        if (newSquareIndex < 0 || newSquareIndex >= 64)
+                            break;
                         int newFile = newSquareIndex % 8;
                         int newRank = newSquareIndex / 8;
-                        bool validMove = std::abs(newFile - prevFile) == 0 || std::abs(newRank - prevRank) == 0;
-                        validMove &= newSquareIndex < 64 && newSquareIndex >= 0;
+                        bool validMove = std::abs(newFile - prevFile) == 0 ||
+                                         std::abs(newRank - prevRank) == 0;
                         prevFile = newFile;
                         prevRank = newRank;
-                        if (!validMove) break;
+                        if (!validMove)
+                            break;
                         Bitboard newSquareBB = (Bitboard)1 << newSquareIndex;
-                        if ((occupancy & newSquareBB) == 0) { 
+                        if ((occupancy & newSquareBB) == 0) {
                             Board newBoard = board;
-                            newBoard.whiteRooks &= ~squareIndexBB; 
-                            newBoard.whiteRooks |= newSquareBB; 
+                            newBoard.whiteRooks &= ~squareIndexBB;
+                            newBoard.whiteRooks |= newSquareBB;
                             moves.push_back(newBoard);
-                        } else if (enemyOccupancy & newSquareBB) { 
+                        } else if (enemyOccupancy & newSquareBB) {
                             Board newBoard = board;
-                            newBoard.whiteRooks &= ~squareIndexBB; 
-                            newBoard.whiteRooks |= newSquareBB; 
+                            newBoard.whiteRooks &= ~squareIndexBB;
+                            newBoard.whiteRooks |= newSquareBB;
                             if (board.blackPawns & newSquareBB) {
                                 newBoard.blackPawns &= ~newSquareBB;
                             } else if (board.blackKnights & newSquareBB) {
@@ -225,8 +244,8 @@ std::vector<Board> genMoves(const Board& board, bool whiteTurn) {
                             }
                             moves.push_back(newBoard);
                             break;
-                        } else { 
-                            break; 
+                        } else {
+                            break;
                         }
                     }
                 }
@@ -235,10 +254,10 @@ std::vector<Board> genMoves(const Board& board, bool whiteTurn) {
         const Bitboard queens = board.whiteQueens;
         for (int squareIndex = 0; squareIndex < 64; squareIndex++) {
             Bitboard squareIndexBB = (Bitboard)1 << squareIndex;
-            if (squareIndexBB & queens) { 
-                // don't change the order of these moves. bishop moves must come first
-                // see diagonalMove variable in the loop below
-                int queenMoves[8] = { 7, 9, -7, -9, 8, -8, 1, -1 };
+            if (squareIndexBB & queens) {
+                // don't change the order of these moves. bishop moves must come
+                // first see diagonalMove variable in the loop below
+                int queenMoves[8] = {7, 9, -7, -9, 8, -8, 1, -1};
                 for (int i = 0; i < 8; i++) {
                     int newSquareIndex = squareIndex;
                     int prevFile = squareIndex % 8;
@@ -246,24 +265,30 @@ std::vector<Board> genMoves(const Board& board, bool whiteTurn) {
                     bool diagonalMove = i < 4;
                     while (true) {
                         newSquareIndex += queenMoves[i];
+                        if (newSquareIndex < 0 || newSquareIndex >= 64)
+                            break;
                         int newFile = newSquareIndex % 8;
                         int newRank = newSquareIndex / 8;
-                        bool validMove = diagonalMove ? std::abs(newFile - prevFile) == std::abs(newRank - prevRank) :
-                                         std::abs(newFile - prevFile) == 0 || std::abs(newRank - prevRank) == 0;
-                        validMove &= newSquareIndex < 64 && newSquareIndex >= 0;
+                        bool validMove =
+                            diagonalMove
+                                ? std::abs(newFile - prevFile) ==
+                                      std::abs(newRank - prevRank)
+                                : std::abs(newFile - prevFile) == 0 ||
+                                      std::abs(newRank - prevRank) == 0;
+                        if (!validMove)
+                            break;
                         prevFile = newFile;
                         prevRank = newRank;
-                        if (!validMove) break;
                         Bitboard newSquareBB = (Bitboard)1 << newSquareIndex;
-                        if ((occupancy & newSquareBB) == 0) { 
+                        if ((occupancy & newSquareBB) == 0) {
                             Board newBoard = board;
-                            newBoard.whiteQueens &= ~squareIndexBB; 
-                            newBoard.whiteQueens |= newSquareBB; 
+                            newBoard.whiteQueens &= ~squareIndexBB;
+                            newBoard.whiteQueens |= newSquareBB;
                             moves.push_back(newBoard);
-                        } else if (enemyOccupancy & newSquareBB) { 
+                        } else if (enemyOccupancy & newSquareBB) {
                             Board newBoard = board;
-                            newBoard.whiteQueens &= ~squareIndexBB; 
-                            newBoard.whiteQueens |= newSquareBB; 
+                            newBoard.whiteQueens &= ~squareIndexBB;
+                            newBoard.whiteQueens |= newSquareBB;
                             if (board.blackPawns & newSquareBB) {
                                 newBoard.blackPawns &= ~newSquareBB;
                             } else if (board.blackKnights & newSquareBB) {
@@ -279,13 +304,64 @@ std::vector<Board> genMoves(const Board& board, bool whiteTurn) {
                             }
                             moves.push_back(newBoard);
                             break;
-                        } else { 
-                            break; 
+                        } else {
+                            break;
                         }
                     }
                 }
             }
         }
-    }    
+        const Bitboard king = board.whiteKing;
+        for (int squareIndex = 0; squareIndex < 64; squareIndex++) {
+            Bitboard squareIndexBB = (Bitboard)1 << squareIndex;
+            if (squareIndexBB & king) {
+                int file = squareIndex % 8;
+                int rank = squareIndex / 8;
+                // first 4 moves must be diagonal moves (like the queen)
+                int kingMoves[8] = {7, 9, -7, -9, 8, -8, 1, -1};
+                for (int i = 0; i < 8; i++) {
+                    int newSquareIndex = squareIndex + kingMoves[i];
+                    if (newSquareIndex < 0 || newSquareIndex >= 64)
+                        continue;
+                    int newFile = newSquareIndex % 8;
+                    int newRank = newSquareIndex / 8;
+                    bool diagonalMove = i < 4;
+                    bool validMove = diagonalMove
+                                         ? std::abs(newFile - file) ==
+                                               std::abs(newRank - rank)
+                                         : std::abs(newFile - file) == 0 ||
+                                               std::abs(newRank - rank) == 0;
+                    if (!validMove)
+                        break;
+                    Bitboard newSquareBB = (Bitboard)1 << newSquareIndex;
+                    if ((occupancy & newSquareBB) == 0) {
+                        Board newBoard = board;
+                        newBoard.whiteKing &= ~squareIndexBB;
+                        newBoard.whiteKing |= newSquareBB;
+                        moves.push_back(newBoard);
+                    } else if (enemyOccupancy & newSquareBB) {
+                        Board newBoard = board;
+                        newBoard.whiteKing &= ~squareIndexBB;
+                        newBoard.whiteKing |= newSquareBB;
+                        if (board.blackPawns & newSquareBB) {
+                            newBoard.blackPawns &= ~newSquareBB;
+                        } else if (board.blackKnights & newSquareBB) {
+                            newBoard.blackKnights &= ~newSquareBB;
+                        } else if (board.blackBishops & newSquareBB) {
+                            newBoard.blackBishops &= ~newSquareBB;
+                        } else if (board.blackRooks & newSquareBB) {
+                            newBoard.blackRooks &= ~newSquareBB;
+                        } else if (board.blackQueen & newSquareBB) {
+                            newBoard.blackQueen &= ~newSquareBB;
+                        } else if (board.blackKing & newSquareBB) {
+                            newBoard.blackKing &= ~newSquareBB;
+                        }
+                        moves.push_back(newBoard);
+                    }
+                }
+                break; // only one king
+            }
+        }
+    }
     return moves;
 }
