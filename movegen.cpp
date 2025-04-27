@@ -2,15 +2,10 @@
 #include <cassert>
 #include <cmath>
 #include <span>
+#include "utilities.h"
 
 // TODO: take into account castling, en passant, promotion, check, checkmate,
 // stalemate, draw.
-
-int perftest(const Board& board, int depth) {
-    int countLeafNodes = 0;
-
-    return countLeafNodes;
-}
 
 void removePiece(int squareIndex, std::span<Bitboard, 6> pieces) {
     assert(squareIndex >= 0 && squareIndex < 64);
@@ -23,8 +18,11 @@ void removePiece(int squareIndex, std::span<Bitboard, 6> pieces) {
     }
 }
 
-std::vector<Board> genMoves(const Board& board, bool whiteTurn) {
-    std::vector<Board> moves;
+int perftest(const Board& board, int depth, bool whiteTurn) {
+    if (depth < 0) {
+        return 0;
+    }
+    int countLeafNodes = 0;
     const Bitboard occupancy = board.allPieces();
     const Bitboard enemyOccupancy = whiteTurn ? board.blackPieces() : board.whitePieces();
     const Bitboard friendlyOccupancy = whiteTurn ? board.whitePieces() : board.blackPieces();
@@ -55,7 +53,7 @@ std::vector<Board> genMoves(const Board& board, bool whiteTurn) {
                     newBoard.pieces[friendlyPieceOffset] &= ~squareIndexBB;
                     newBoard.pieces[friendlyPieceOffset] |= oneSquareForwardBB;
                     // TODO: Handle promotion
-                    moves.push_back(newBoard);
+                    countLeafNodes += perftest(newBoard, depth - 1, !whiteTurn);
 
                     // Double Push only if single push is possible
                     if (rank == pawnStartRank)
@@ -69,7 +67,7 @@ std::vector<Board> genMoves(const Board& board, bool whiteTurn) {
                                 doublePushBoard.pieces[friendlyPieceOffset] &= ~squareIndexBB;
                                 doublePushBoard.pieces[friendlyPieceOffset] |= twoSquaresForwardBB;
                                 // TODO: Set en passant target square
-                                moves.push_back(doublePushBoard);
+                                countLeafNodes += perftest(newBoard, depth - 1, !whiteTurn);
                             }
                         }
                     }
@@ -87,7 +85,7 @@ std::vector<Board> genMoves(const Board& board, bool whiteTurn) {
                         std::span<Bitboard, 6> newEnemyPieces = std::span<Bitboard, 6>(&newBoard.pieces[enemyPieceOffset], 6);
                         removePiece(leftDiagIndex, newEnemyPieces);
                         // TODO: Handle promotion
-                        moves.push_back(newBoard);
+                        countLeafNodes += perftest(newBoard, depth - 1, !whiteTurn);
                     }
                     // TODO: Handle en passant capture left
                 }
@@ -104,7 +102,7 @@ std::vector<Board> genMoves(const Board& board, bool whiteTurn) {
                         std::span<Bitboard, 6> newEnemyPieces = std::span<Bitboard, 6>(&newBoard.pieces[enemyPieceOffset], 6);
                         removePiece(rightDiagIndex, newEnemyPieces);
                         // TODO: Handle promotion
-                        moves.push_back(newBoard);
+                        countLeafNodes += perftest(newBoard, depth - 1, !whiteTurn);
                     }
                     // TODO: Handle en passant capture right
                 }
@@ -140,7 +138,7 @@ std::vector<Board> genMoves(const Board& board, bool whiteTurn) {
                     if (enemyOccupancy & newSquareBB) { 
                         removePiece(newSquareIndex, newEnemyPieces);
                     }
-                    moves.push_back(newBoard);
+                    countLeafNodes += perftest(newBoard, depth - 1, !whiteTurn);
                 }
             }
         }
@@ -197,12 +195,13 @@ std::vector<Board> genMoves(const Board& board, bool whiteTurn) {
                         Board newBoard = board;
                         newBoard.pieces[friendlyPieceOffset + pieceInfo.pieceIndex] &= ~squareIndexBB; 
                         newBoard.pieces[friendlyPieceOffset + pieceInfo.pieceIndex] |= newSquareBB;  
-                        moves.push_back(newBoard);
                         if (enemyOccupancy & newSquareBB) {
                             std::span<Bitboard, 6> newEnemyPieces(newBoard.pieces + enemyPieceOffset, 6);
                             removePiece(newSquareIndex, newEnemyPieces);
-                            moves.push_back(newBoard);
+                            countLeafNodes += perftest(newBoard, depth - 1, !whiteTurn);
                             break; // Stop sliding after capturing an enemy piece
+                        } else {
+                            countLeafNodes += perftest(newBoard, depth - 1, !whiteTurn);
                         }
                     }
                 }
@@ -244,12 +243,15 @@ std::vector<Board> genMoves(const Board& board, bool whiteTurn) {
                         removePiece(newSquareIndex, newEnemyPieces);
                     }
                     // TODO: Add check generation logic here - king cannot move into check
-                    moves.push_back(newBoard);
+                    countLeafNodes += perftest(newBoard, depth - 1, !whiteTurn);
                 }
             }
             // TODO: Add castling logic
             break; // Only one king per side
         }
     }
-    return moves;
+    if (countLeafNodes == 0) { 
+        countLeafNodes++;
+    }
+    return countLeafNodes;
 }
