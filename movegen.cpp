@@ -1,366 +1,254 @@
 #include "movegen.h"
+#include <cassert>
 #include <cmath>
+#include <span>
 
 // TODO: take into account castling, en passant, promotion, check, checkmate,
 // stalemate, draw.
 
-void perftest(const Board &board, int &countLeafNodes, int depth) {
-    if (depth == 0) {
-        countLeafNodes++;
-        return;
+int perftest(const Board& board, int depth) {
+    int countLeafNodes = 0;
+
+    return countLeafNodes;
+}
+
+void removePiece(int squareIndex, std::span<Bitboard, 6> pieces) {
+    assert(squareIndex >= 0 && squareIndex < 64);
+    Bitboard captureSquareBB = (Bitboard)1 << squareIndex;
+    for (Bitboard& pieceBoard : pieces) {
+        if (pieceBoard & captureSquareBB) {
+            pieceBoard &= ~captureSquareBB;
+            return;
+        }
     }
 }
 
-std::vector<Board> genMoves(const Board &board, bool whiteTurn) {
+std::vector<Board> genMoves(const Board& board, bool whiteTurn) {
     std::vector<Board> moves;
-    // assuming whiteTurn is true for now
-    if (whiteTurn) {
-        const Bitboard pawns = board.whitePawns;
-        const Bitboard occupancy = board.allPieces();
-        const Bitboard enemyOccupancy = board.blackPieces();
-        for (int squareIndex = 0; squareIndex < 64; squareIndex++) {
-            Bitboard squareIndexBB = (Bitboard)1 << squareIndex;
-            if (squareIndexBB & pawns) { // we have a pawn at squareIndex
-                int oneSquareForwardIndex = squareIndex + 8;
-                Bitboard oneSquareForwardBB = (Bitboard)1
-                                              << oneSquareForwardIndex;
-                if ((occupancy & oneSquareForwardBB) ==
-                    0) { // pawn can move one square forward
+    const Bitboard occupancy = board.allPieces();
+    const Bitboard enemyOccupancy = whiteTurn ? board.blackPieces() : board.whitePieces();
+    const Bitboard friendlyOccupancy = whiteTurn ? board.whitePieces() : board.blackPieces();
+    std::span<const Bitboard, 6> enemyPieces = whiteTurn ? std::span<const Bitboard, 6>(&board.pieces[BLACK_PIECE_OFFSET], 6) : 
+                                                           std::span<const Bitboard, 6>{&board.pieces[WHITE_PIECE_OFFSET], 6 }; 
+    std::span<const Bitboard, 6> friendlyPieces = whiteTurn ? std::span<const Bitboard, 6>(&board.pieces[WHITE_PIECE_OFFSET], 6) :
+                                                               std::span<const Bitboard, 6>{&board.pieces[BLACK_PIECE_OFFSET], 6 };
+    const int friendlyPieceOffset = whiteTurn ? WHITE_PIECE_OFFSET : BLACK_PIECE_OFFSET;
+    const int enemyPieceOffset = whiteTurn ? BLACK_PIECE_OFFSET : WHITE_PIECE_OFFSET;
+    const Bitboard pawns = friendlyPieces[PAWN_OFFSET];
+    const int pawnDirection = whiteTurn ? 8 : -8;
+    const int pawnStartRank = whiteTurn ? 1 : 6;
+    const int leftCaptureOffset = whiteTurn ? 7 : -9;  
+    const int rightCaptureOffset = whiteTurn ? 9 : -7; 
+    
+    for (int squareIndex = 0; squareIndex < 64; squareIndex++) {
+        Bitboard squareIndexBB = (Bitboard)1 << squareIndex;
+        if (squareIndexBB & pawns)
+        {
+            int rank = squareIndex / 8;
+            int file = squareIndex % 8;
+
+            int oneSquareForwardIndex = squareIndex + pawnDirection;
+            if (oneSquareForwardIndex >= 0 && oneSquareForwardIndex < 64) { 
+                Bitboard oneSquareForwardBB = (Bitboard)1 << oneSquareForwardIndex;
+                if ((occupancy & oneSquareForwardBB) == 0) {
                     Board newBoard = board;
-                    newBoard.whitePawns &=
-                        ~squareIndexBB; // zero out original square
-                    newBoard.whitePawns |=
-                        oneSquareForwardIndex; // 1 where destination square is
+                    newBoard.pieces[friendlyPieceOffset] &= ~squareIndexBB;
+                    newBoard.pieces[friendlyPieceOffset] |= oneSquareForwardBB;
+                    // TODO: Handle promotion
                     moves.push_back(newBoard);
-                }
-                int rank = squareIndex / 8;
-                if (rank ==
-                    1) { // pawn is on starting rank, can move 2 squares forward
-                    int twoSquaresForwardIndex = oneSquareForwardIndex + 8;
-                    Bitboard twoSquaresForwardBB = (Bitboard)1
-                                                   << twoSquaresForwardIndex;
-                    if ((occupancy & twoSquaresForwardBB) == 0) {
-                        Board newBoard = board;
-                        newBoard.whitePawns &=
-                            ~squareIndexBB; // zero out original square
-                        newBoard.whitePawns |=
-                            twoSquaresForwardBB; // 1 where destination square
-                                                 // is
-                        moves.push_back(newBoard);
+
+                    // Double Push only if single push is possible
+                    if (rank == pawnStartRank)
+                    {
+                        int twoSquaresForwardIndex = oneSquareForwardIndex + pawnDirection;
+                        if (twoSquaresForwardIndex >= 0 && twoSquaresForwardIndex < 64) { 
+                            Bitboard twoSquaresForwardBB = (Bitboard)1 << twoSquaresForwardIndex;
+                            if ((occupancy & twoSquaresForwardBB) == 0)
+                            {
+                                Board doublePushBoard = board;
+                                doublePushBoard.pieces[friendlyPieceOffset] &= ~squareIndexBB;
+                                doublePushBoard.pieces[friendlyPieceOffset] |= twoSquaresForwardBB;
+                                // TODO: Set en passant target square
+                                moves.push_back(doublePushBoard);
+                            }
+                        }
                     }
                 }
-                int file = squareIndex % 8;
-                if (file > 0) { // left diagonal exists
-                    int leftDiagIndex = oneSquareForwardIndex - 1;
+            }
+            // Left Capture
+            if (file > 0) { 
+                int leftDiagIndex = squareIndex + leftCaptureOffset;
+                if (leftDiagIndex >= 0 && leftDiagIndex < 64) { 
                     Bitboard leftDiagBB = (Bitboard)1 << leftDiagIndex;
                     if (enemyOccupancy & leftDiagBB) {
                         Board newBoard = board;
-                        newBoard.whitePawns &= ~squareIndexBB;
-                        newBoard.whitePawns |= leftDiagBB;
-                        // figure out which enemy piece is at destination square
-                        if (board.blackPawns & leftDiagBB) {
-                            newBoard.blackPawns &= ~leftDiagBB;
-                        } else if (board.blackKnights & leftDiagBB) {
-                            newBoard.blackKnights &= ~leftDiagBB;
-                        } else if (board.blackBishops & leftDiagBB) {
-                            newBoard.blackBishops &= ~leftDiagBB;
-                        } else if (board.blackRooks & leftDiagBB) {
-                            newBoard.blackRooks &= ~leftDiagBB;
-                        } else if (board.blackQueen & leftDiagBB) {
-                            newBoard.blackQueen &= ~leftDiagBB;
-                        } else if (board.blackKing & leftDiagBB) {
-                            newBoard.blackKing &= ~leftDiagBB;
-                        }
+                        newBoard.pieces[friendlyPieceOffset] &= ~squareIndexBB;
+                        newBoard.pieces[friendlyPieceOffset] |= leftDiagBB;
+                        std::span<Bitboard, 6> newEnemyPieces = std::span<Bitboard, 6>(&newBoard.pieces[enemyPieceOffset], 6);
+                        removePiece(leftDiagIndex, newEnemyPieces);
+                        // TODO: Handle promotion
                         moves.push_back(newBoard);
                     }
+                    // TODO: Handle en passant capture left
                 }
-                if (file < 7) { // right diagonal exists
-                    int rightDiagIndex = oneSquareForwardIndex + 1;
+            }
+            // Right Capture
+            if (file < 7) {
+                int rightDiagIndex = squareIndex + rightCaptureOffset;
+                if (rightDiagIndex >= 0 && rightDiagIndex < 64) { 
                     Bitboard rightDiagBB = (Bitboard)1 << rightDiagIndex;
                     if (enemyOccupancy & rightDiagBB) {
                         Board newBoard = board;
-                        newBoard.whitePawns &= ~squareIndexBB;
-                        newBoard.whitePawns |= rightDiagBB;
-                        // figure out which enemy piece is at destination square
-                        if (board.blackPawns & rightDiagBB) {
-                            newBoard.blackPawns &= ~rightDiagBB;
-                        } else if (board.blackKnights & rightDiagBB) {
-                            newBoard.blackKnights &= ~rightDiagBB;
-                        } else if (board.blackBishops & rightDiagBB) {
-                            newBoard.blackBishops &= ~rightDiagBB;
-                        } else if (board.blackRooks & rightDiagBB) {
-                            newBoard.blackRooks &= ~rightDiagBB;
-                        } else if (board.blackQueen & rightDiagBB) {
-                            newBoard.blackQueen &= ~rightDiagBB;
-                        } else if (board.blackKing & rightDiagBB) {
-                            newBoard.blackKing &= ~rightDiagBB;
-                        }
+                        newBoard.pieces[friendlyPieceOffset] &= ~squareIndexBB;
+                        newBoard.pieces[friendlyPieceOffset] |= rightDiagBB;
+                        std::span<Bitboard, 6> newEnemyPieces = std::span<Bitboard, 6>(&newBoard.pieces[enemyPieceOffset], 6);
+                        removePiece(rightDiagIndex, newEnemyPieces);
+                        // TODO: Handle promotion
                         moves.push_back(newBoard);
                     }
+                    // TODO: Handle en passant capture right
                 }
             }
         }
-        const Bitboard knights = board.whiteKnights;
-        for (int squareIndex = 0; squareIndex < 64; squareIndex++) {
-            Bitboard squareIndexBB = (Bitboard)1 << squareIndex;
-            if (squareIndexBB & knights) {
-                int file = squareIndex % 8;
-                int rank = squareIndex / 8;
-                int knightMoves[8] = {6, 10, 15, 17, -6, -10, -15, -17};
-                for (int i = 0; i < 8; i++) {
-                    int newSquareIndex = squareIndex + knightMoves[i];
-                    int newFile = newSquareIndex % 8;
-                    int newRank = newSquareIndex / 8;
-                    bool validMove = std::abs(newFile - file) == 1 &&
-                                         std::abs(newRank - rank) == 2 ||
-                                     std::abs(newFile - file) == 2 &&
-                                         std::abs(newRank - rank) == 1;
-                    validMove &= newSquareIndex < 64 && newSquareIndex >= 0;
-                    if (validMove) {
-                        Bitboard newSquareBB = (Bitboard)1 << newSquareIndex;
-                        if ((occupancy & newSquareBB) == 0) {
-                            Board newBoard = board;
-                            newBoard.whiteKnights &= ~squareIndexBB;
-                            newBoard.whiteKnights |= newSquareBB;
-                            moves.push_back(newBoard);
-                        } else if (enemyOccupancy & newSquareBB) {
-                            Board newBoard = board;
-                            newBoard.whiteKnights &= ~squareIndexBB;
-                            newBoard.whiteKnights |= newSquareBB;
-                            if (board.blackPawns & newSquareBB) {
-                                newBoard.blackPawns &= ~newSquareBB;
-                            } else if (board.blackKnights & newSquareBB) {
-                                newBoard.blackKnights &= ~newSquareBB;
-                            } else if (board.blackBishops & newSquareBB) {
-                                newBoard.blackBishops &= ~newSquareBB;
-                            } else if (board.blackRooks & newSquareBB) {
-                                newBoard.blackRooks &= ~newSquareBB;
-                            } else if (board.blackQueen & newSquareBB) {
-                                newBoard.blackQueen &= ~newSquareBB;
-                            } else if (board.blackKing & newSquareBB) {
-                                newBoard.blackKing &= ~newSquareBB;
-                            }
-                            moves.push_back(newBoard);
-                        }
+    }
+
+    const Bitboard knights = friendlyPieces[KNIGHT_OFFSET];
+    constexpr int knightMoves[8] = {6, 10, 15, 17, -6, -10, -15, -17};
+    for (int squareIndex = 0; squareIndex < 64; squareIndex++) {
+        Bitboard squareIndexBB = (Bitboard)1 << squareIndex;
+        if (squareIndexBB & knights) {
+            int file = squareIndex % 8;
+            int rank = squareIndex / 8;
+            for (int moveOffset : knightMoves) {
+                int newSquareIndex = squareIndex + moveOffset;
+                if (newSquareIndex < 0 || newSquareIndex >= 64)
+                    continue;
+
+                int newFile = newSquareIndex % 8;
+                int newRank = newSquareIndex / 8;
+
+                bool validMove = (std::abs(newFile - file) == 1 && std::abs(newRank - rank) == 2) ||
+                                 (std::abs(newFile - file) == 2 && std::abs(newRank - rank) == 1);
+                if (!validMove) { continue; }
+                Bitboard newSquareBB = (Bitboard)1 << newSquareIndex;
+                if ((friendlyOccupancy & newSquareBB) == 0) { // Can't move to a square occupied by a friendly piece
+                    Board newBoard = board;
+                    newBoard.pieces[friendlyPieceOffset + KNIGHT_OFFSET] &= ~squareIndexBB; // Remove knight from original square
+                    newBoard.pieces[friendlyPieceOffset + KNIGHT_OFFSET] |= newSquareBB;    // Place knight on new square
+                    
+                    std::span<Bitboard, 6> newEnemyPieces(newBoard.pieces + enemyPieceOffset, 6);
+                    if (enemyOccupancy & newSquareBB) { 
+                        removePiece(newSquareIndex, newEnemyPieces);
                     }
+                    moves.push_back(newBoard);
                 }
             }
         }
-        const Bitboard bishops = board.whiteBishops;
+    }
+
+    struct SlidingPiece {
+        int pieceIndex;
+        const int* moves;
+        int numMoves;
+    };
+
+    int bishopMoves[4] = {7, 9, -7, -9};
+    int rookMoves[4] = {8, -8, 1, -1};
+    int queenMoves[8] = {7, 9, -7, -9, 8, -8, 1, -1}; // Diagonal first
+
+    SlidingPiece slidingPieces[] = {
+        {BISHOP_OFFSET, bishopMoves, 4},
+        {ROOK_OFFSET, rookMoves, 4},
+        {QUEEN_OFFSET, queenMoves, 8}
+    };
+
+    for (const SlidingPiece& pieceInfo : slidingPieces) {
+        const Bitboard pieceBoard = friendlyPieces[pieceInfo.pieceIndex];
         for (int squareIndex = 0; squareIndex < 64; squareIndex++) {
             Bitboard squareIndexBB = (Bitboard)1 << squareIndex;
-            if (squareIndexBB & bishops) {
-                int bishopMoves[4] = {7, 9, -7, -9};
-                for (int i = 0; i < 4; i++) {
+            if (squareIndexBB & pieceBoard) {
+                for (int i = 0; i < pieceInfo.numMoves; i++) {
+                    int moveOffset = pieceInfo.moves[i];
                     int newSquareIndex = squareIndex;
                     int prevFile = squareIndex % 8;
                     int prevRank = squareIndex / 8;
+                    bool diagonalMove = pieceInfo.pieceIndex == BISHOP_OFFSET || (pieceInfo.pieceIndex == QUEEN_OFFSET && i < 4);
                     while (true) {
-                        newSquareIndex += bishopMoves[i];
+                        newSquareIndex += moveOffset;
+                        if (newSquareIndex < 0 || newSquareIndex >= 64) break;
+
                         int newFile = newSquareIndex % 8;
                         int newRank = newSquareIndex / 8;
-                        bool validMove = std::abs(newFile - prevFile) ==
-                                         std::abs(newRank - prevRank);
-                        validMove &= newSquareIndex < 64 && newSquareIndex >= 0;
-                        prevFile = newFile;
-                        prevRank = newRank;
-                        if (!validMove)
-                            break;
-                        Bitboard newSquareBB = (Bitboard)1 << newSquareIndex;
-                        if ((occupancy & newSquareBB) == 0) {
-                            Board newBoard = board;
-                            newBoard.whiteBishops &= ~squareIndexBB;
-                            newBoard.whiteBishops |= newSquareBB;
-                            moves.push_back(newBoard);
-                        } else if (enemyOccupancy & newSquareBB) {
-                            Board newBoard = board;
-                            newBoard.whiteBishops &= ~squareIndexBB;
-                            newBoard.whiteBishops |= newSquareBB;
-                            if (board.blackPawns & newSquareBB) {
-                                newBoard.blackPawns &= ~newSquareBB;
-                            } else if (board.blackKnights & newSquareBB) {
-                                newBoard.blackKnights &= ~newSquareBB;
-                            } else if (board.blackBishops & newSquareBB) {
-                                newBoard.blackBishops &= ~newSquareBB;
-                            } else if (board.blackRooks & newSquareBB) {
-                                newBoard.blackRooks &= ~newSquareBB;
-                            } else if (board.blackQueen & newSquareBB) {
-                                newBoard.blackQueen &= ~newSquareBB;
-                            } else if (board.blackKing & newSquareBB) {
-                                newBoard.blackKing &= ~newSquareBB;
-                            }
-                            moves.push_back(newBoard);
-                            break;
-                        } else { // friendly piece at destination
-                            break;
-                        }
-                    }
-                }
-            }
-        }
-        const Bitboard rooks = board.whiteRooks;
-        for (int squareIndex = 0; squareIndex < 64; squareIndex++) {
-            Bitboard squareIndexBB = (Bitboard)1 << squareIndex;
-            if (squareIndexBB & rooks) {
-                int rookMoves[4] = {8, -8, 1, -1};
-                for (int i = 0; i < 4; i++) {
-                    int newSquareIndex = squareIndex;
-                    int prevFile = squareIndex % 8;
-                    int prevRank = squareIndex / 8;
-                    while (true) {
-                        newSquareIndex += rookMoves[i];
-                        if (newSquareIndex < 0 || newSquareIndex >= 64)
-                            break;
-                        int newFile = newSquareIndex % 8;
-                        int newRank = newSquareIndex / 8;
-                        bool validMove = std::abs(newFile - prevFile) == 0 ||
-                                         std::abs(newRank - prevRank) == 0;
-                        prevFile = newFile;
-                        prevRank = newRank;
-                        if (!validMove)
-                            break;
-                        Bitboard newSquareBB = (Bitboard)1 << newSquareIndex;
-                        if ((occupancy & newSquareBB) == 0) {
-                            Board newBoard = board;
-                            newBoard.whiteRooks &= ~squareIndexBB;
-                            newBoard.whiteRooks |= newSquareBB;
-                            moves.push_back(newBoard);
-                        } else if (enemyOccupancy & newSquareBB) {
-                            Board newBoard = board;
-                            newBoard.whiteRooks &= ~squareIndexBB;
-                            newBoard.whiteRooks |= newSquareBB;
-                            if (board.blackPawns & newSquareBB) {
-                                newBoard.blackPawns &= ~newSquareBB;
-                            } else if (board.blackKnights & newSquareBB) {
-                                newBoard.blackKnights &= ~newSquareBB;
-                            } else if (board.blackBishops & newSquareBB) {
-                                newBoard.blackBishops &= ~newSquareBB;
-                            } else if (board.blackRooks & newSquareBB) {
-                                newBoard.blackRooks &= ~newSquareBB;
-                            } else if (board.blackQueen & newSquareBB) {
-                                newBoard.blackQueen &= ~newSquareBB;
-                            } else if (board.blackKing & newSquareBB) {
-                                newBoard.blackKing &= ~newSquareBB;
-                            }
-                            moves.push_back(newBoard);
-                            break;
+
+                        bool validStep;
+                        if (diagonalMove) {
+                            validStep = std::abs(newFile - prevFile) == 1 && std::abs(newRank - prevRank) == 1;
                         } else {
-                            break;
+                            validStep = std::abs(newFile - prevFile) == 0 || std::abs(newRank - prevRank) == 0;
                         }
-                    }
-                }
-            }
-        }
-        const Bitboard queens = board.whiteQueens;
-        for (int squareIndex = 0; squareIndex < 64; squareIndex++) {
-            Bitboard squareIndexBB = (Bitboard)1 << squareIndex;
-            if (squareIndexBB & queens) {
-                // don't change the order of these moves. bishop moves must come
-                // first see diagonalMove variable in the loop below
-                int queenMoves[8] = {7, 9, -7, -9, 8, -8, 1, -1};
-                for (int i = 0; i < 8; i++) {
-                    int newSquareIndex = squareIndex;
-                    int prevFile = squareIndex % 8;
-                    int prevRank = squareIndex / 8;
-                    bool diagonalMove = i < 4;
-                    while (true) {
-                        newSquareIndex += queenMoves[i];
-                        if (newSquareIndex < 0 || newSquareIndex >= 64)
-                            break;
-                        int newFile = newSquareIndex % 8;
-                        int newRank = newSquareIndex / 8;
-                        bool validMove =
-                            diagonalMove
-                                ? std::abs(newFile - prevFile) ==
-                                      std::abs(newRank - prevRank)
-                                : std::abs(newFile - prevFile) == 0 ||
-                                      std::abs(newRank - prevRank) == 0;
-                        if (!validMove)
-                            break;
+
+                        if (!validStep) break;
                         prevFile = newFile;
                         prevRank = newRank;
                         Bitboard newSquareBB = (Bitboard)1 << newSquareIndex;
-                        if ((occupancy & newSquareBB) == 0) {
-                            Board newBoard = board;
-                            newBoard.whiteQueens &= ~squareIndexBB;
-                            newBoard.whiteQueens |= newSquareBB;
+                        
+                        if (friendlyOccupancy & newSquareBB) break; // Blocked by friendly piece
+
+                        Board newBoard = board;
+                        newBoard.pieces[friendlyPieceOffset + pieceInfo.pieceIndex] &= ~squareIndexBB; 
+                        newBoard.pieces[friendlyPieceOffset + pieceInfo.pieceIndex] |= newSquareBB;  
+                        moves.push_back(newBoard);
+                        if (enemyOccupancy & newSquareBB) {
+                            std::span<Bitboard, 6> newEnemyPieces(newBoard.pieces + enemyPieceOffset, 6);
+                            removePiece(newSquareIndex, newEnemyPieces);
                             moves.push_back(newBoard);
-                        } else if (enemyOccupancy & newSquareBB) {
-                            Board newBoard = board;
-                            newBoard.whiteQueens &= ~squareIndexBB;
-                            newBoard.whiteQueens |= newSquareBB;
-                            if (board.blackPawns & newSquareBB) {
-                                newBoard.blackPawns &= ~newSquareBB;
-                            } else if (board.blackKnights & newSquareBB) {
-                                newBoard.blackKnights &= ~newSquareBB;
-                            } else if (board.blackBishops & newSquareBB) {
-                                newBoard.blackBishops &= ~newSquareBB;
-                            } else if (board.blackRooks & newSquareBB) {
-                                newBoard.blackRooks &= ~newSquareBB;
-                            } else if (board.blackQueen & newSquareBB) {
-                                newBoard.blackQueen &= ~newSquareBB;
-                            } else if (board.blackKing & newSquareBB) {
-                                newBoard.blackKing &= ~newSquareBB;
-                            }
-                            moves.push_back(newBoard);
-                            break;
-                        } else {
-                            break;
+                            break; // Stop sliding after capturing an enemy piece
                         }
                     }
                 }
             }
         }
-        const Bitboard king = board.whiteKing;
-        for (int squareIndex = 0; squareIndex < 64; squareIndex++) {
-            Bitboard squareIndexBB = (Bitboard)1 << squareIndex;
-            if (squareIndexBB & king) {
-                int file = squareIndex % 8;
-                int rank = squareIndex / 8;
-                // first 4 moves must be diagonal moves (like the queen)
-                int kingMoves[8] = {7, 9, -7, -9, 8, -8, 1, -1};
-                for (int i = 0; i < 8; i++) {
-                    int newSquareIndex = squareIndex + kingMoves[i];
-                    if (newSquareIndex < 0 || newSquareIndex >= 64)
-                        continue;
-                    int newFile = newSquareIndex % 8;
-                    int newRank = newSquareIndex / 8;
-                    bool diagonalMove = i < 4;
-                    bool validMove = diagonalMove
-                                         ? std::abs(newFile - file) ==
-                                               std::abs(newRank - rank)
-                                         : std::abs(newFile - file) == 0 ||
-                                               std::abs(newRank - rank) == 0;
-                    if (!validMove)
-                        break;
-                    Bitboard newSquareBB = (Bitboard)1 << newSquareIndex;
-                    if ((occupancy & newSquareBB) == 0) {
-                        Board newBoard = board;
-                        newBoard.whiteKing &= ~squareIndexBB;
-                        newBoard.whiteKing |= newSquareBB;
-                        moves.push_back(newBoard);
-                    } else if (enemyOccupancy & newSquareBB) {
-                        Board newBoard = board;
-                        newBoard.whiteKing &= ~squareIndexBB;
-                        newBoard.whiteKing |= newSquareBB;
-                        if (board.blackPawns & newSquareBB) {
-                            newBoard.blackPawns &= ~newSquareBB;
-                        } else if (board.blackKnights & newSquareBB) {
-                            newBoard.blackKnights &= ~newSquareBB;
-                        } else if (board.blackBishops & newSquareBB) {
-                            newBoard.blackBishops &= ~newSquareBB;
-                        } else if (board.blackRooks & newSquareBB) {
-                            newBoard.blackRooks &= ~newSquareBB;
-                        } else if (board.blackQueen & newSquareBB) {
-                            newBoard.blackQueen &= ~newSquareBB;
-                        } else if (board.blackKing & newSquareBB) {
-                            newBoard.blackKing &= ~newSquareBB;
-                        }
-                        moves.push_back(newBoard);
+    }
+
+    const Bitboard king = friendlyPieces[KING_OFFSET];
+    int kingMoves[8] = {7, 9, -7, -9, 8, -8, 1, -1};
+    for (int squareIndex = 0; squareIndex < 64; squareIndex++)
+    {
+        Bitboard squareIndexBB = (Bitboard)1 << squareIndex;
+        if (squareIndexBB & king)
+        {
+            int file = squareIndex % 8;
+            int rank = squareIndex / 8;
+            for (int moveOffset : kingMoves)
+            {
+                int newSquareIndex = squareIndex + moveOffset;
+                if (newSquareIndex < 0 || newSquareIndex >= 64)
+                    continue; // Off board
+
+                int newFile = newSquareIndex % 8;
+                int newRank = newSquareIndex / 8;
+
+                // Check if move wraps around the board incorrectly (distance > 1 in file or rank)
+                if (std::abs(newFile - file) > 1 || std::abs(newRank - rank) > 1)
+                    continue;
+
+                Bitboard newSquareBB = (Bitboard)1 << newSquareIndex;
+                if ((friendlyOccupancy & newSquareBB) == 0)
+                { // Can't move to a square occupied by a friendly piece
+                    Board newBoard = board;
+                    newBoard.pieces[friendlyPieceOffset + KING_OFFSET] &= ~squareIndexBB; // Remove king from original square
+                    newBoard.pieces[friendlyPieceOffset + KING_OFFSET] |= newSquareBB;    // Place king on new square
+
+                    if (enemyOccupancy & newSquareBB) {
+                        std::span<Bitboard, 6> newEnemyPieces(newBoard.pieces + enemyPieceOffset, 6);
+                        removePiece(newSquareIndex, newEnemyPieces);
                     }
+                    // TODO: Add check generation logic here - king cannot move into check
+                    moves.push_back(newBoard);
                 }
-                break; // only one king
             }
+            // TODO: Add castling logic
+            break; // Only one king per side
         }
     }
     return moves;
