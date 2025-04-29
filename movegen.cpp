@@ -67,7 +67,7 @@ int perftest(const Board& board, int depth, bool whiteTurn) {
                                 doublePushBoard.pieces[friendlyPieceOffset] &= ~squareIndexBB;
                                 doublePushBoard.pieces[friendlyPieceOffset] |= twoSquaresForwardBB;
                                 // TODO: Set en passant target square
-                                countLeafNodes += perftest(newBoard, depth - 1, !whiteTurn);
+                                countLeafNodes += perftest(doublePushBoard, depth - 1, !whiteTurn);
                             }
                         }
                     }

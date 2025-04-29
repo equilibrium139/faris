@@ -6,6 +6,7 @@
 int main() {
     Board board;
     // board.whitePawns &= 0b0000000011111111ULL; // clear pawns
-    std::cout << "perftest(2): " << perftest(board, 2, true) << '\n';
+    int n = 4;
+    std::cout << "perftest(" << n << "): " << perftest(board, n, true) << '\n';
     return 0;
 }
