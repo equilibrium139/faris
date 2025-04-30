@@ -1,6 +1,7 @@
 #pragma once
 
 #include <cstdint>
+#include <span>
 
 using Bitboard = std::uint64_t;
 static constexpr Bitboard WP_START = 0xFF00ULL;
@@ -24,6 +25,17 @@ static constexpr int KING_OFFSET = 5;
 static constexpr int WHITE_PIECE_OFFSET = 0;
 static constexpr int BLACK_PIECE_OFFSET = 6;
 
+static constexpr int COUNT_BITBOARDS = 12;
+
+enum class PieceType {
+    Pawn, Knight, Bishop, Rook, Queen, King, None
+};
+
+struct Piece {
+    PieceType type;
+    bool color; // 0-black 1-white
+};
+
 struct Board {
     union {
         struct {
@@ -40,7 +52,7 @@ struct Board {
             Bitboard blackQueens;
             Bitboard blackKing;
         };
-        Bitboard pieces[12];
+        Bitboard pieces[COUNT_BITBOARDS];
     };
 
     std::uint64_t whitePieces() const {
@@ -54,6 +66,9 @@ struct Board {
     std::uint64_t allPieces() const { return whitePieces() | blackPieces(); }
 
     std::uint64_t emptySquares() const { return ~allPieces(); }
+
+    std::span<const Bitboard, 6> whiteBitboards() const { return std::span<const Bitboard, 6>{&pieces[WHITE_PIECE_OFFSET], 6}; }
+    std::span<const Bitboard, 6> blackBitboards() const { return std::span<const Bitboard, 6>{&pieces[BLACK_PIECE_OFFSET], 6}; }
 
     Board() {
         whitePawns = WP_START;

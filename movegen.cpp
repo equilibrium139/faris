@@ -18,18 +18,147 @@ void removePiece(int squareIndex, std::span<Bitboard, 6> pieces) {
     }
 }
 
+static Piece pieceAt(int squareIndex, const Board& board) {
+    Bitboard squareIndexBB = (Bitboard)1 << squareIndex;
+    for (int i = 0; i < COUNT_BITBOARDS; i++) {
+        if (squareIndexBB & board.pieces[i]) {
+            return i < 6 ? Piece{ PieceType(i), true } : Piece{ PieceType(i - 6), false}; 
+        }
+    }
+    return {PieceType::None};
+}
+
+// kingColor 0-black 1-white
+static bool inCheck(const Board& board, bool kingColor) {
+    Bitboard kingBB = kingColor ? board.whiteKing : board.blackKing;
+    int kingSquareIndex = 0;
+    while (kingSquareIndex < 64)
+    {
+        Bitboard squareIndexBB = (Bitboard)1 << kingSquareIndex;
+        if (squareIndexBB & kingBB)
+        {
+            break;
+        }
+        kingSquareIndex++;
+    }
+
+    // Check up, down, left, right for rook/queen
+    int kingRank = kingSquareIndex / 8;
+    int kingFile = kingSquareIndex % 8;
+    for (int rank = kingRank + 1; rank < 8; rank++) {
+        int squareIndex = rank * 8 + kingFile;
+        Piece piece = pieceAt(squareIndex, board);
+        if (piece.type == PieceType::None) continue;
+        if (piece.color != kingColor && (piece.type == PieceType::Queen || piece.type == PieceType::Rook)) return true;
+        break; 
+    }
+    for (int rank = kingRank - 1; rank >= 0; rank--) {
+        int squareIndex = rank * 8 + kingFile;
+        Piece piece = pieceAt(squareIndex, board); 
+        if (piece.type == PieceType::None) continue;
+        if (piece.color != kingColor && (piece.type == PieceType::Queen || piece.type == PieceType::Rook)) return true;
+        break;
+    }
+    for (int file = kingFile + 1; file < 8; file++) {
+        int squareIndex = kingRank * 8 + file;
+        Piece piece = pieceAt(squareIndex, board);
+        if (piece.type == PieceType::None) continue;
+        if (piece.color != kingColor && (piece.type == PieceType::Queen || piece.type == PieceType::Rook)) return true;
+        break;
+    }
+    for (int file = kingFile - 1; file >= 0; file--) {
+        int squareIndex = kingRank * 8 + file;
+        Piece piece = pieceAt(squareIndex, board);
+        if (piece.type == PieceType::None) continue;
+        if (piece.color != kingColor && (piece.type == PieceType::Queen || piece.type == PieceType::Rook)) return true;
+        break;
+    }
+
+    // Check diagonals for bishop/queen
+    for (int rank = kingRank + 1, file = kingFile + 1; rank < 8 && file < 8; rank++, file++) {
+        int squareIndex = rank * 8 + file;
+        Piece piece = pieceAt(squareIndex, board);
+        if (piece.type == PieceType::None) continue;
+        if (piece.color != kingColor && (piece.type == PieceType::Queen || piece.type == PieceType::Bishop)) return true;
+        break; // friendly or enemy non-bishop/queen piece
+    }
+    for (int rank = kingRank + 1, file = kingFile - 1; rank < 8 && file >= 0; rank++, file--) {
+        int squareIndex = rank * 8 + file;
+        Piece piece = pieceAt(squareIndex, board);
+        if (piece.type == PieceType::None) continue;
+        if (piece.color != kingColor && (piece.type == PieceType::Queen || piece.type == PieceType::Bishop)) return true;
+        break;
+    }
+    for (int rank = kingRank - 1, file = kingFile + 1; rank >= 0 && file < 8; rank--, file++) {
+        int squareIndex = rank * 8 + file;
+        Piece piece = pieceAt(squareIndex, board);
+        if (piece.type == PieceType::None) continue;
+        if (piece.color != kingColor && (piece.type == PieceType::Queen || piece.type == PieceType::Bishop)) return true;
+        break;
+    }
+    for (int rank = kingRank - 1, file = kingFile - 1; rank >= 0 && file >= 0; rank--, file--) {
+        int squareIndex = rank * 8 + file;
+        Piece piece = pieceAt(squareIndex, board);
+        if (piece.type == PieceType::None) continue;
+        if (piece.color != kingColor && (piece.type == PieceType::Queen || piece.type == PieceType::Bishop)) return true;
+        break;
+    }
+
+    constexpr int knightMoves[8] = {6, 10, 15, 17, -6, -10, -15, -17};
+    for (int moveOffset : knightMoves) {
+        int newSquareIndex = kingSquareIndex + moveOffset;
+        if (newSquareIndex < 0 || newSquareIndex >= 64)
+            continue;
+
+        int newFile = newSquareIndex % 8;
+        int newRank = newSquareIndex / 8;
+
+        bool validMove = (std::abs(newFile - kingFile) == 1 && std::abs(newRank - kingRank) == 2) ||
+                         (std::abs(newFile - kingFile) == 2 && std::abs(newRank - kingRank) == 1);
+        if (!validMove) { continue; }
+        Piece piece = pieceAt(newSquareIndex, board);
+        if (piece.color != kingColor && piece.type == PieceType::Knight) return true;
+    }
+
+    int pawnCaptureOffsets[2] = {7, 9};
+    if (!kingColor) {
+        pawnCaptureOffsets[0] *= -1; 
+        pawnCaptureOffsets[1] *= -1; 
+    }
+    for (int i = 0; i < 2; i++) {
+        int newSquareIndex = kingSquareIndex + pawnCaptureOffsets[i];
+        if (newSquareIndex < 0 || newSquareIndex >= 64)
+            continue;
+
+        int newFile = newSquareIndex % 8;
+        int newRank = newSquareIndex / 8;
+
+        bool validMove = (std::abs(newFile - kingFile) == 1 && std::abs(newRank - kingRank) == 1);
+        if (!validMove) { continue; }
+        Piece piece = pieceAt(newSquareIndex, board);
+        if (piece.color != kingColor && piece.type == PieceType::Pawn) return true;
+    }
+    return false;
+}
+
+// TODO: make move arrays constexpr
+// TODO: change whiteTurn to color and don't hardcode 0/1 for black/white
 int perftest(const Board& board, int depth, bool whiteTurn) {
     if (depth < 0) {
+        return 0;
+    }
+    const bool opponentColor = !whiteTurn;
+    if (inCheck(board, opponentColor)) {
         return 0;
     }
     int countLeafNodes = 0;
     const Bitboard occupancy = board.allPieces();
     const Bitboard enemyOccupancy = whiteTurn ? board.blackPieces() : board.whitePieces();
     const Bitboard friendlyOccupancy = whiteTurn ? board.whitePieces() : board.blackPieces();
-    std::span<const Bitboard, 6> enemyPieces = whiteTurn ? std::span<const Bitboard, 6>(&board.pieces[BLACK_PIECE_OFFSET], 6) : 
-                                                           std::span<const Bitboard, 6>{&board.pieces[WHITE_PIECE_OFFSET], 6 }; 
-    std::span<const Bitboard, 6> friendlyPieces = whiteTurn ? std::span<const Bitboard, 6>(&board.pieces[WHITE_PIECE_OFFSET], 6) :
-                                                               std::span<const Bitboard, 6>{&board.pieces[BLACK_PIECE_OFFSET], 6 };
+    std::span<const Bitboard, 6> enemyPieces = whiteTurn ? board.blackBitboards() : 
+                                                           board.whiteBitboards(); 
+    std::span<const Bitboard, 6> friendlyPieces = whiteTurn ? board.whiteBitboards():
+                                                              board.blackBitboards();
     const int friendlyPieceOffset = whiteTurn ? WHITE_PIECE_OFFSET : BLACK_PIECE_OFFSET;
     const int enemyPieceOffset = whiteTurn ? BLACK_PIECE_OFFSET : WHITE_PIECE_OFFSET;
     const Bitboard pawns = friendlyPieces[PAWN_OFFSET];
