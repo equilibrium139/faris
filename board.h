@@ -55,6 +55,8 @@ struct Board {
         Bitboard pieces[COUNT_BITBOARDS];
     };
 
+    std::uint8_t enPassant;
+
     std::uint64_t whitePieces() const {
         return whitePawns | whiteKnights | whiteBishops | whiteRooks | whiteQueens | whiteKing;
     }
@@ -69,6 +71,8 @@ struct Board {
 
     std::span<const Bitboard, 6> whiteBitboards() const { return std::span<const Bitboard, 6>{&pieces[WHITE_PIECE_OFFSET], 6}; }
     std::span<const Bitboard, 6> blackBitboards() const { return std::span<const Bitboard, 6>{&pieces[BLACK_PIECE_OFFSET], 6}; }
+    std::span<Bitboard, 6> whiteBitboards() { return std::span<Bitboard, 6>{&pieces[WHITE_PIECE_OFFSET], 6}; }
+    std::span<Bitboard, 6> blackBitboards() { return std::span<Bitboard, 6>{&pieces[BLACK_PIECE_OFFSET], 6}; }
 
     Board() {
         whitePawns = WP_START;
@@ -83,5 +87,6 @@ struct Board {
         blackRooks = BR_START;
         blackQueens = BQ_START;
         blackKing = BK_START;
+        enPassant = 0;
     }
 };
