@@ -56,6 +56,12 @@ struct Board {
     };
 
     std::uint8_t enPassant;
+    // These only indicate if the king and corresponding rook have moved,
+    // not if castling is currently possible (intermediate squares clear/unattacked).
+    bool whiteKingsideCastlingRight = true;
+    bool whiteQueensideCastlingRight = true;
+    bool blackKingsideCastlingRight = true;
+    bool blackQueensideCastlingRight = true;
 
     std::uint64_t whitePieces() const {
         return whitePawns | whiteKnights | whiteBishops | whiteRooks | whiteQueens | whiteKing;

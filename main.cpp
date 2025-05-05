@@ -4,7 +4,7 @@
 #include <iostream>
 
 int main(int argc, char** argv) {
-    int depth = 5;
+    int depth = 6;
     if (argc > 1) {
         depth = std::atoi(argv[1]);
     }

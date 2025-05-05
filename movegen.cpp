@@ -34,115 +34,139 @@ static Piece pieceAt(int squareIndex, const Board& board) {
     return {PieceType::None};
 }
 
-// kingColor 0-black 1-white
-static bool inCheck(const Board& board, bool kingColor) {
-    Bitboard kingBB = kingColor ? board.whiteKing : board.blackKing;
-    int kingSquareIndex = 0;
-    while (kingSquareIndex < 64)
-    {
-        Bitboard squareIndexBB = (Bitboard)1 << kingSquareIndex;
-        if (squareIndexBB & kingBB)
-        {
-            break;
-        }
-        kingSquareIndex++;
-    }
+static bool underThreat(const Board &board, int squareIndex, bool threatColor) {
+    Bitboard bb = (Bitboard)1 << squareIndex;
 
     // Check up, down, left, right for rook/queen
-    int kingRank = kingSquareIndex / 8;
-    int kingFile = kingSquareIndex % 8;
-    for (int rank = kingRank + 1; rank < 8; rank++) {
-        int squareIndex = rank * 8 + kingFile;
-        Piece piece = pieceAt(squareIndex, board);
-        if (piece.type == PieceType::None) continue;
-        if (piece.color != kingColor && (piece.type == PieceType::Queen || piece.type == PieceType::Rook)) return true;
-        break; 
-    }
-    for (int rank = kingRank - 1; rank >= 0; rank--) {
-        int squareIndex = rank * 8 + kingFile;
-        Piece piece = pieceAt(squareIndex, board); 
-        if (piece.type == PieceType::None) continue;
-        if (piece.color != kingColor && (piece.type == PieceType::Queen || piece.type == PieceType::Rook)) return true;
+    const int squareRank = squareIndex / 8;
+    const int squareFile = squareIndex % 8;
+    for (int rank = squareRank + 1; rank < 8; rank++)
+    {
+        int index = rank * 8 + squareFile;
+        Piece piece = pieceAt(index, board);
+        if (piece.type == PieceType::None)
+            continue;
+        if (piece.color == threatColor && (piece.type == PieceType::Queen || piece.type == PieceType::Rook))
+            return true;
         break;
     }
-    for (int file = kingFile + 1; file < 8; file++) {
-        int squareIndex = kingRank * 8 + file;
-        Piece piece = pieceAt(squareIndex, board);
-        if (piece.type == PieceType::None) continue;
-        if (piece.color != kingColor && (piece.type == PieceType::Queen || piece.type == PieceType::Rook)) return true;
+    for (int rank = squareRank - 1; rank >= 0; rank--)
+    {
+        int index = rank * 8 + squareFile;
+        Piece piece = pieceAt(index, board);
+        if (piece.type == PieceType::None)
+            continue;
+        if (piece.color == threatColor && (piece.type == PieceType::Queen || piece.type == PieceType::Rook))
+            return true;
         break;
     }
-    for (int file = kingFile - 1; file >= 0; file--) {
-        int squareIndex = kingRank * 8 + file;
-        Piece piece = pieceAt(squareIndex, board);
-        if (piece.type == PieceType::None) continue;
-        if (piece.color != kingColor && (piece.type == PieceType::Queen || piece.type == PieceType::Rook)) return true;
+    for (int file = squareFile + 1; file < 8; file++)
+    {
+        int index = squareRank * 8 + file;
+        Piece piece = pieceAt(index, board);
+        if (piece.type == PieceType::None)
+            continue;
+        if (piece.color == threatColor && (piece.type == PieceType::Queen || piece.type == PieceType::Rook))
+            return true;
+        break;
+    }
+    for (int file = squareFile - 1; file >= 0; file--)
+    {
+        int index = squareRank * 8 + file;
+        Piece piece = pieceAt(index, board);
+        if (piece.type == PieceType::None)
+            continue;
+        if (piece.color == threatColor && (piece.type == PieceType::Queen || piece.type == PieceType::Rook))
+            return true;
         break;
     }
 
     // Check diagonals for bishop/queen
-    for (int rank = kingRank + 1, file = kingFile + 1; rank < 8 && file < 8; rank++, file++) {
-        int squareIndex = rank * 8 + file;
-        Piece piece = pieceAt(squareIndex, board);
-        if (piece.type == PieceType::None) continue;
-        if (piece.color != kingColor && (piece.type == PieceType::Queen || piece.type == PieceType::Bishop)) return true;
+    for (int rank = squareRank + 1, file = squareFile + 1; rank < 8 && file < 8; rank++, file++)
+    {
+        int index = rank * 8 + file;
+        Piece piece = pieceAt(index, board);
+        if (piece.type == PieceType::None)
+            continue;
+        if (piece.color == threatColor && (piece.type == PieceType::Queen || piece.type == PieceType::Bishop))
+            return true;
         break; // friendly or enemy non-bishop/queen piece
     }
-    for (int rank = kingRank + 1, file = kingFile - 1; rank < 8 && file >= 0; rank++, file--) {
-        int squareIndex = rank * 8 + file;
-        Piece piece = pieceAt(squareIndex, board);
-        if (piece.type == PieceType::None) continue;
-        if (piece.color != kingColor && (piece.type == PieceType::Queen || piece.type == PieceType::Bishop)) return true;
+    for (int rank = squareRank + 1, file = squareFile - 1; rank < 8 && file >= 0; rank++, file--)
+    {
+        int index = rank * 8 + file;
+        Piece piece = pieceAt(index, board);
+        if (piece.type == PieceType::None)
+            continue;
+        if (piece.color == threatColor && (piece.type == PieceType::Queen || piece.type == PieceType::Bishop))
+            return true;
         break;
     }
-    for (int rank = kingRank - 1, file = kingFile + 1; rank >= 0 && file < 8; rank--, file++) {
-        int squareIndex = rank * 8 + file;
-        Piece piece = pieceAt(squareIndex, board);
-        if (piece.type == PieceType::None) continue;
-        if (piece.color != kingColor && (piece.type == PieceType::Queen || piece.type == PieceType::Bishop)) return true;
+    for (int rank = squareRank - 1, file = squareFile + 1; rank >= 0 && file < 8; rank--, file++)
+    {
+        int index = rank * 8 + file;
+        Piece piece = pieceAt(index, board);
+        if (piece.type == PieceType::None)
+            continue;
+        if (piece.color == threatColor && (piece.type == PieceType::Queen || piece.type == PieceType::Bishop))
+            return true;
         break;
     }
-    for (int rank = kingRank - 1, file = kingFile - 1; rank >= 0 && file >= 0; rank--, file--) {
-        int squareIndex = rank * 8 + file;
-        Piece piece = pieceAt(squareIndex, board);
-        if (piece.type == PieceType::None) continue;
-        if (piece.color != kingColor && (piece.type == PieceType::Queen || piece.type == PieceType::Bishop)) return true;
+    for (int rank = squareRank - 1, file = squareFile - 1; rank >= 0 && file >= 0; rank--, file--)
+    {
+        int index = rank * 8 + file;
+        Piece piece = pieceAt(index, board);
+        if (piece.type == PieceType::None)
+            continue;
+        if (piece.color == threatColor && (piece.type == PieceType::Queen || piece.type == PieceType::Bishop))
+            return true;
         break;
     }
 
     constexpr int knightMoves[8] = {6, 10, 15, 17, -6, -10, -15, -17};
-    for (int moveOffset : knightMoves) {
-        int newSquareIndex = kingSquareIndex + moveOffset;
+    for (int moveOffset : knightMoves)
+    {
+        int newSquareIndex = squareIndex + moveOffset;
         if (newSquareIndex < 0 || newSquareIndex >= 64)
             continue;
 
         int newFile = newSquareIndex % 8;
         int newRank = newSquareIndex / 8;
 
-        bool validMove = (std::abs(newFile - kingFile) == 1 && std::abs(newRank - kingRank) == 2) ||
-                         (std::abs(newFile - kingFile) == 2 && std::abs(newRank - kingRank) == 1);
-        if (!validMove) { continue; }
+        bool validMove = (std::abs(newFile - squareFile) == 1 && std::abs(newRank - squareRank) == 2) ||
+                         (std::abs(newFile - squareFile) == 2 && std::abs(newRank - squareRank) == 1);
+        if (!validMove)
+        {
+            continue;
+        }
         Piece piece = pieceAt(newSquareIndex, board);
-        if (piece.color != kingColor && piece.type == PieceType::Knight) return true;
+        if (piece.color == threatColor && piece.type == PieceType::Knight)
+            return true;
     }
 
     int pawnCaptureOffsets[2] = {7, 9};
-    if (!kingColor) {
-        pawnCaptureOffsets[0] *= -1; 
-        pawnCaptureOffsets[1] *= -1; 
+    if (threatColor) 
+    {
+        pawnCaptureOffsets[0] *= -1;
+        pawnCaptureOffsets[1] *= -1;
     }
-    for (int i = 0; i < 2; i++) {
-        int newSquareIndex = kingSquareIndex + pawnCaptureOffsets[i];
+    for (int i = 0; i < 2; i++)
+    {
+        int newSquareIndex = squareIndex + pawnCaptureOffsets[i];
         if (newSquareIndex < 0 || newSquareIndex >= 64)
             continue;
 
         int newFile = newSquareIndex % 8;
         int newRank = newSquareIndex / 8;
 
-        bool validMove = (std::abs(newFile - kingFile) == 1 && std::abs(newRank - kingRank) == 1);
-        if (!validMove) { continue; }
+        bool validMove = (std::abs(newFile - squareFile) == 1 && std::abs(newRank - squareRank) == 1);
+        if (!validMove)
+        {
+            continue;
+        }
         Piece piece = pieceAt(newSquareIndex, board);
-        if (piece.color != kingColor && piece.type == PieceType::Pawn) return true;
+        if (piece.color == threatColor && piece.type == PieceType::Pawn)
+            return true;
     }
     return false;
 }
@@ -168,6 +192,19 @@ int perftest(const Board& board, int depth, bool whiteTurn) {
     const int pawnStartRank = whiteTurn ? 1 : 6;
     const int leftCaptureOffset = whiteTurn ? 7 : -9; 
     const int rightCaptureOffset = whiteTurn ? 9 : -7;
+    const int kingsideRookSquareIndex = whiteTurn ? 7 : 63;
+    const int queensideRookSquareIndex = whiteTurn ? 0 : 56;
+
+    int originalKingSquareIndex = 0; 
+    while (originalKingSquareIndex < 64)
+    {
+        Bitboard squareIndexBB = (Bitboard)1 << originalKingSquareIndex;
+        if (squareIndexBB & friendlyPieces[KING_OFFSET])
+        {
+            break;
+        }
+        originalKingSquareIndex++;
+    }
     
     for (int squareIndex = 0; squareIndex < 64; squareIndex++) {
         Bitboard squareIndexBB = (Bitboard)1 << squareIndex;
@@ -185,7 +222,7 @@ int perftest(const Board& board, int depth, bool whiteTurn) {
                     newBoard.pieces[friendlyPieceOffset] |= oneSquareForwardBB;
                     // TODO: Handle promotion
                     newBoard.enPassant = 0; 
-                    if (!inCheck(newBoard, whiteTurn)) {
+                    if (!underThreat(newBoard, originalKingSquareIndex, !whiteTurn)) {
                         countLeafNodes += perftest(newBoard, depth - 1, !whiteTurn);
                     }
 
@@ -202,7 +239,7 @@ int perftest(const Board& board, int depth, bool whiteTurn) {
                                 doublePushBoard.pieces[friendlyPieceOffset] |= twoSquaresForwardBB;
                                 // TODO: Set en passant target square
                                 doublePushBoard.enPassant = twoSquaresForwardIndex;
-                                if (!inCheck(doublePushBoard, whiteTurn)) {
+                                if (!underThreat(doublePushBoard, originalKingSquareIndex, !whiteTurn)) {
                                     countLeafNodes += perftest(doublePushBoard, depth - 1, !whiteTurn);
                                 }
                             }
@@ -222,7 +259,7 @@ int perftest(const Board& board, int depth, bool whiteTurn) {
                         removePiece(leftDiagIndex, newBoard, !whiteTurn);
                         // TODO: Handle promotion
                         newBoard.enPassant = 0;
-                        if (!inCheck(newBoard, whiteTurn)) {
+                        if (!underThreat(newBoard, originalKingSquareIndex, !whiteTurn)) {
                             countLeafNodes += perftest(newBoard, depth - 1, !whiteTurn);
                         }
                     }
@@ -234,7 +271,7 @@ int perftest(const Board& board, int depth, bool whiteTurn) {
                         newBoard.pieces[friendlyPieceOffset] |= leftDiagBB;
                         removePiece(leftIndex, newBoard, !whiteTurn);
                         newBoard.enPassant = 0; // reset en passant
-                        if (!inCheck(newBoard, whiteTurn)) {
+                        if (!underThreat(newBoard, originalKingSquareIndex, !whiteTurn)) {
                             countLeafNodes += perftest(newBoard, depth - 1, !whiteTurn);
                         }
                     }
@@ -252,7 +289,7 @@ int perftest(const Board& board, int depth, bool whiteTurn) {
                         removePiece(rightDiagIndex, newBoard, !whiteTurn);
                         // TODO: Handle promotion
                         newBoard.enPassant = 0;
-                        if (!inCheck(newBoard, whiteTurn)) {
+                        if (!underThreat(newBoard, originalKingSquareIndex, !whiteTurn)) {
                             countLeafNodes += perftest(newBoard, depth - 1, !whiteTurn);
                         }
                     }
@@ -264,7 +301,7 @@ int perftest(const Board& board, int depth, bool whiteTurn) {
                         newBoard.pieces[friendlyPieceOffset] |= rightDiagBB;
                         removePiece(rightIndex, newBoard, !whiteTurn);
                         newBoard.enPassant = 0; 
-                        if (!inCheck(newBoard, whiteTurn)) {
+                        if (!underThreat(newBoard, originalKingSquareIndex, !whiteTurn)) {
                             countLeafNodes += perftest(newBoard, depth - 1, !whiteTurn);
                         }
                     }
@@ -302,7 +339,7 @@ int perftest(const Board& board, int depth, bool whiteTurn) {
                     }
                     
                     newBoard.enPassant = 0; 
-                    if (!inCheck(newBoard, whiteTurn)) {
+                    if (!underThreat(newBoard, originalKingSquareIndex, !whiteTurn)) {
                         countLeafNodes += perftest(newBoard, depth - 1, !whiteTurn);
                     }
                 }
@@ -365,13 +402,45 @@ int perftest(const Board& board, int depth, bool whiteTurn) {
                             removePiece(newSquareIndex, newBoard, !whiteTurn);
                             
                             newBoard.enPassant = 0; 
-                            if (!inCheck(newBoard, whiteTurn)) {
+                            if (!underThreat(newBoard, originalKingSquareIndex, !whiteTurn)) {
+                                if (pieceInfo.pieceIndex == ROOK_OFFSET) {
+                                    if (squareIndex == kingsideRookSquareIndex) {
+                                        if (whiteTurn) {
+                                            newBoard.whiteKingsideCastlingRight = false;
+                                        } else {
+                                            newBoard.blackKingsideCastlingRight = false;
+                                        }
+                                    } else if (squareIndex == queensideRookSquareIndex) {
+                                        if (whiteTurn) {
+                                            newBoard.whiteQueensideCastlingRight = false;
+                                        } else {
+                                            newBoard.blackQueensideCastlingRight = false;
+                                        }
+                                    }
+                                }
+
                                 countLeafNodes += perftest(newBoard, depth - 1, !whiteTurn);
                             }
                             break; // Stop sliding after capturing an enemy piece
                         } else {
                             newBoard.enPassant = 0;
-                            if (!inCheck(newBoard, whiteTurn)) {
+                            if (!underThreat(newBoard, originalKingSquareIndex, !whiteTurn)) {
+                                if (pieceInfo.pieceIndex == ROOK_OFFSET) {
+                                    if (squareIndex == kingsideRookSquareIndex) {
+                                        if (whiteTurn) {
+                                            newBoard.whiteKingsideCastlingRight = false;
+                                        } else {
+                                            newBoard.blackKingsideCastlingRight = false;
+                                        }
+                                    } else if (squareIndex == queensideRookSquareIndex) {
+                                        if (whiteTurn) {
+                                            newBoard.whiteQueensideCastlingRight = false;
+                                        } else {
+                                            newBoard.blackQueensideCastlingRight = false;
+                                        }
+                                    }
+                                }
+
                                 countLeafNodes += perftest(newBoard, depth - 1, !whiteTurn);
                             }
                         }
@@ -414,17 +483,54 @@ int perftest(const Board& board, int depth, bool whiteTurn) {
                         removePiece(newSquareIndex, newBoard, !whiteTurn);
                     }
                     newBoard.enPassant = 0;
-                    if (!inCheck(newBoard, whiteTurn)) {
+                    if (!underThreat(newBoard, newSquareIndex, !whiteTurn)) {
+                        if (whiteTurn) {
+                            newBoard.whiteKingsideCastlingRight = false;
+                            newBoard.whiteQueensideCastlingRight = false;
+                        } else {
+                            newBoard.blackKingsideCastlingRight = false;
+                            newBoard.blackQueensideCastlingRight = false;
+                        }
                         countLeafNodes += perftest(newBoard, depth - 1, !whiteTurn);
                     }
                 }
             }
             // TODO: Add castling logic
+            bool kingsideCastlingRight = whiteTurn ? board.whiteKingsideCastlingRight : board.blackKingsideCastlingRight;
+            bool queensideCastlingRight = whiteTurn ? board.whiteQueensideCastlingRight : board.blackQueensideCastlingRight;
+            if (kingsideCastlingRight) {
+                bool squaresVacant = true;
+                constexpr int kingsideRookFile = 7; 
+                for (int i = squareIndex; i < kingsideRookSquareIndex; i++) {
+                    Bitboard bb = (Bitboard)1 << i;
+                    if (occupancy & bb) {
+                        squaresVacant = false;
+                        break;
+                    }
+                }
+                if (squaresVacant) {
+                    bool enemyPrevents = underThreat(board, originalKingSquareIndex, whiteTurn)     ||
+                                         underThreat(board, originalKingSquareIndex + 1, whiteTurn) ||
+                                         underThreat(board, originalKingSquareIndex + 2, whiteTurn);
+                    if (!enemyPrevents) {
+                        Board newBoard = board;
+                        newBoard.pieces[friendlyPieceOffset + KING_OFFSET] &= ~squareIndexBB; // Remove king from original square
+                        newBoard.pieces[friendlyPieceOffset + KING_OFFSET] |= (Bitboard)1 << (squareIndex + 2); // Place king on new square
+                        newBoard.pieces[friendlyPieceOffset + ROOK_OFFSET] &= ~(Bitboard)1 << kingsideRookSquareIndex; // Remove rook from original square
+                        newBoard.pieces[friendlyPieceOffset + ROOK_OFFSET] |= (Bitboard)1 << (squareIndex + 1); // Place rook on new square
+                        // no need to check for threat, already checked above
+                        newBoard.whiteKingsideCastlingRight = false;
+                        newBoard.whiteQueensideCastlingRight = false;
+                        countLeafNodes += perftest(newBoard, depth - 1, !whiteTurn);
+                    }               
+                }
+            }
             break; // Only one king per side
         }
     }
-    if (countLeafNodes == 0 && !inCheck(board, whiteTurn)) { 
+    if (countLeafNodes == 0 && !underThreat(board, originalKingSquareIndex, whiteTurn)) {
         countLeafNodes++;
     }
+
     return countLeafNodes;
 }
