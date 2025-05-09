@@ -1,42 +1,89 @@
 {
-    "version": 8,
+    "version": 5,
     "configurePresets": [
         {
-            "name": "debug",
-            "displayName": "Debug",
-            "description": "Using compilers: C = /usr/bin/gcc, CXX = /usr/bin/g++",
-            "binaryDir": "${sourceDir}/build/${presetName}",
+            "name": "wsl-debug",
+            "displayName": "WSL Debug (GCC)",
+            "description": "Debug build for WSL using GCC/G++.",
+            "generator": "Ninja",
+            "binaryDir": "${sourceDir}/build/wsl-debug",
             "cacheVariables": {
-                "CMAKE_INSTALL_PREFIX": "${sourceDir}/build/install/${presetName}",
-                "CMAKE_C_COMPILER": "/usr/bin/gcc",
-                "CMAKE_CXX_COMPILER": "/usr/bin/g++",
+                "CMAKE_BUILD_TYPE": "Debug",
+                "CMAKE_C_COMPILER": "gcc",
+                "CMAKE_CXX_COMPILER": "g++",
+                "CMAKE_EXPORT_COMPILE_COMMANDS": "ON"
+            }
+        },
+        {
+            "name": "wsl-release-debug",
+            "displayName": "WSL RelWithDebInfo (GCC)",
+            "description": "Release with Debug Info build for WSL using GCC/G++.",
+            "generator": "Ninja",
+            "binaryDir": "${sourceDir}/build/wsl-release-debug",
+            "cacheVariables": {
+                "CMAKE_BUILD_TYPE": "RelWithDebInfo",
+                "CMAKE_C_COMPILER": "gcc",
+                "CMAKE_CXX_COMPILER": "g++",
+                "CMAKE_EXPORT_COMPILE_COMMANDS": "ON"
+            }
+        },
+        {
+            "name": "wsl-release-profile-gprof",
+            "displayName": "WSL ReleaseProfile Gprof (GCC)",
+            "description": "WSL Release build with Gprof profiling flags using GCC/G++.",
+            "generator": "Ninja",
+            "binaryDir": "${sourceDir}/build/wsl-release-profile-gprof",
+            "cacheVariables": {
+                "CMAKE_BUILD_TYPE": "RelWithDebInfo",
+                "CMAKE_C_COMPILER": "gcc",
+                "CMAKE_CXX_COMPILER": "g++",
+                "CMAKE_EXPORT_COMPILE_COMMANDS": "ON",
+                "CMAKE_CXX_FLAGS": "-pg",
+                "CMAKE_EXE_LINKER_FLAGS": "-pg"
+            }
+        },
+        {
+            "name": "windows-vs-debug",
+            "displayName": "Windows Visual Studio Debug",
+            "description": "Debug build for Windows using Visual Studio's default compiler.",
+            "generator": "Visual Studio 17 2022",
+            "binaryDir": "${sourceDir}/build/windows-vs-debug",
+            "architecture": {
+                "value": "x64",
+                "strategy": "set"
+            },
+            "cacheVariables": {
                 "CMAKE_BUILD_TYPE": "Debug",
                 "CMAKE_EXPORT_COMPILE_COMMANDS": "ON"
             }
         },
         {
-            "name": "release",
-            "displayName": "Release",
-            "description": "Using compilers: C = /usr/bin/gcc, CXX = /usr/bin/g++",
-            "binaryDir": "${sourceDir}/build/${presetName}",
+            "name": "windows-vs-release-debug",
+            "displayName": "Windows Visual Studio RelWithDebInfo",
+            "description": "Release with Debug Info build for Windows using Visual Studio's default compiler.",
+            "generator": "Visual Studio 17 2022",
+            "binaryDir": "${sourceDir}/build/windows-vs-release-debug",
+            "architecture": {
+                "value": "x64",
+                "strategy": "set"
+            },
             "cacheVariables": {
-                "CMAKE_INSTALL_PREFIX": "${sourceDir}/build/install/${presetName}",
-                "CMAKE_C_COMPILER": "/usr/bin/gcc",
-                "CMAKE_CXX_COMPILER": "/usr/bin/g++",
-                "CMAKE_BUILD_TYPE": "Release",
+                "CMAKE_BUILD_TYPE": "RelWithDebInfo",
                 "CMAKE_EXPORT_COMPILE_COMMANDS": "ON"
             }
         },
         {
-            "name": "release_debug",
-            "displayName": "RelWithDebInfo",
-            "description": "Using compilers: C = /usr/bin/gcc, CXX = /usr/bin/g++",
-            "binaryDir": "${sourceDir}/build/${presetName}",
+            "name": "windows-vs-release",
+            "displayName": "Windows Visual Studio Release",
+            "description": "Release build for Windows using Visual Studio's default compiler.",
+            "generator": "Visual Studio 17 2022",
+            "binaryDir": "${sourceDir}/build/windows-vs-release",
+            "architecture": {
+                "value": "x64",
+                "strategy": "set"
+            },
             "cacheVariables": {
-                "CMAKE_INSTALL_PREFIX": "${sourceDir}/build/install/${presetName}",
-                "CMAKE_C_COMPILER": "/usr/bin/gcc",
-                "CMAKE_CXX_COMPILER": "/usr/bin/g++",
-                "CMAKE_BUILD_TYPE": "RelWithDebInfo",
+                "CMAKE_BUILD_TYPE": "Release",
                 "CMAKE_EXPORT_COMPILE_COMMANDS": "ON"
             }
         }
