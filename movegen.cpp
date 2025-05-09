@@ -173,11 +173,11 @@ static bool underThreat(const Board &board, int squareIndex, bool threatColor) {
 
 // TODO: make move arrays constexpr
 // TODO: change whiteTurn to color and don't hardcode 0/1 for black/white
-int perftest(const Board& board, int depth, bool whiteTurn) {
+std::uint64_t perftest(const Board& board, int depth, bool whiteTurn) {
     if (depth == 0) {
         return 1;
     }
-    int countLeafNodes = 0;
+    std::uint64_t countLeafNodes = 0;
     const Bitboard occupancy = board.allPieces();
     const Bitboard enemyOccupancy = whiteTurn ? board.blackPieces() : board.whitePieces();
     const Bitboard friendlyOccupancy = whiteTurn ? board.whitePieces() : board.blackPieces();
@@ -491,6 +491,9 @@ int perftest(const Board& board, int depth, bool whiteTurn) {
                             newBoard.blackKingsideCastlingRight = false;
                             newBoard.blackQueensideCastlingRight = false;
                         }
+                        // TODO: find a better way to handle resetting en passant. This is error 
+                        // prone because it has to be done every recursive call
+                        newBoard.enPassant = 0;
                         countLeafNodes += perftest(newBoard, depth - 1, !whiteTurn);
                     }
                 }
@@ -499,28 +502,55 @@ int perftest(const Board& board, int depth, bool whiteTurn) {
             bool kingsideCastlingRight = whiteTurn ? board.whiteKingsideCastlingRight : board.blackKingsideCastlingRight;
             bool queensideCastlingRight = whiteTurn ? board.whiteQueensideCastlingRight : board.blackQueensideCastlingRight;
             if (kingsideCastlingRight) {
-                bool squaresVacant = true;
+                bool squaresVacant = (occupancy & ((Bitboard)1 << (squareIndex + 1))) == 0 &&
+                                     (occupancy & ((Bitboard)1 << (squareIndex + 2))) == 0;
                 constexpr int kingsideRookFile = 7; 
-                for (int i = squareIndex; i < kingsideRookSquareIndex; i++) {
-                    Bitboard bb = (Bitboard)1 << i;
-                    if (occupancy & bb) {
-                        squaresVacant = false;
-                        break;
-                    }
-                }
                 if (squaresVacant) {
-                    bool enemyPrevents = underThreat(board, originalKingSquareIndex, whiteTurn)     ||
-                                         underThreat(board, originalKingSquareIndex + 1, whiteTurn) ||
-                                         underThreat(board, originalKingSquareIndex + 2, whiteTurn);
+                    bool enemyPrevents = underThreat(board, originalKingSquareIndex, !whiteTurn)     ||
+                                         underThreat(board, originalKingSquareIndex + 1, !whiteTurn) ||
+                                         underThreat(board, originalKingSquareIndex + 2, !whiteTurn);
                     if (!enemyPrevents) {
                         Board newBoard = board;
                         newBoard.pieces[friendlyPieceOffset + KING_OFFSET] &= ~squareIndexBB; // Remove king from original square
                         newBoard.pieces[friendlyPieceOffset + KING_OFFSET] |= (Bitboard)1 << (squareIndex + 2); // Place king on new square
                         newBoard.pieces[friendlyPieceOffset + ROOK_OFFSET] &= ~(Bitboard)1 << kingsideRookSquareIndex; // Remove rook from original square
                         newBoard.pieces[friendlyPieceOffset + ROOK_OFFSET] |= (Bitboard)1 << (squareIndex + 1); // Place rook on new square
+                        if (whiteTurn) {
+                            newBoard.whiteKingsideCastlingRight = false;
+                            newBoard.whiteQueensideCastlingRight = false;
+                        } else {
+                            newBoard.blackKingsideCastlingRight = false;
+                            newBoard.blackQueensideCastlingRight = false;
+                        }
                         // no need to check for threat, already checked above
-                        newBoard.whiteKingsideCastlingRight = false;
-                        newBoard.whiteQueensideCastlingRight = false;
+                        newBoard.enPassant = 0;
+                        countLeafNodes += perftest(newBoard, depth - 1, !whiteTurn);
+                    }               
+                }
+            }
+            if (queensideCastlingRight) {
+                bool squaresVacant = (occupancy & ((Bitboard)1 << (squareIndex - 1))) == 0 &&
+                                     (occupancy & ((Bitboard)1 << (squareIndex - 2))) == 0 &&
+                                     (occupancy & ((Bitboard)1 << (squareIndex - 3))) == 0;
+                if (squaresVacant) {
+                    bool enemyPrevents = underThreat(board, originalKingSquareIndex, !whiteTurn)     ||
+                                         underThreat(board, originalKingSquareIndex - 1, !whiteTurn) ||
+                                         underThreat(board, originalKingSquareIndex - 2, !whiteTurn);
+                    if (!enemyPrevents) {
+                        Board newBoard = board;
+                        newBoard.pieces[friendlyPieceOffset + KING_OFFSET] &= ~squareIndexBB; // Remove king from original square
+                        newBoard.pieces[friendlyPieceOffset + KING_OFFSET] |= (Bitboard)1 << (squareIndex - 2); // Place king on new square
+                        newBoard.pieces[friendlyPieceOffset + ROOK_OFFSET] &= ~(Bitboard)1 << queensideRookSquareIndex; // Remove rook from original square
+                        newBoard.pieces[friendlyPieceOffset + ROOK_OFFSET] |= (Bitboard)1 << (squareIndex - 1); // Place rook on new square
+                        // no need to check for threat, already checked above
+                        if (whiteTurn) {
+                            newBoard.whiteKingsideCastlingRight = false;
+                            newBoard.whiteQueensideCastlingRight = false;
+                        } else {
+                            newBoard.blackKingsideCastlingRight = false;
+                            newBoard.blackQueensideCastlingRight = false;
+                        }
+                        newBoard.enPassant = 0;
                         countLeafNodes += perftest(newBoard, depth - 1, !whiteTurn);
                     }               
                 }
@@ -528,9 +558,6 @@ int perftest(const Board& board, int depth, bool whiteTurn) {
             break; // Only one king per side
         }
     }
-    if (countLeafNodes == 0 && !underThreat(board, originalKingSquareIndex, whiteTurn)) {
-        countLeafNodes++;
-    }
-
+    
     return countLeafNodes;
 }
