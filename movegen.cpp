@@ -181,6 +181,27 @@ static bool underThreat(const Board &board, int squareIndex, bool threatColor) {
 			return true;
 		}
     }
+
+    Bitboard enemyKingBB = threatColor ? board.whiteKing : board.blackKing; 
+    int kingAttackOffsets[8] = {7, 9, -7, -9, 8, -8, 1, -1};
+    for (int offset : kingAttackOffsets)
+    {
+        int attackedSquare = squareIndex + offset;
+        if (attackedSquare < 0 || attackedSquare >= 64)
+            continue;
+
+        // Check for board wrap-around for king moves
+        int attackedFile = attackedSquare % 8;
+        int attackedRank = attackedSquare / 8;
+        if (std::abs(attackedFile - squareFile) > 1 || std::abs(attackedRank - squareRank) > 1)
+            continue;
+
+        if (((Bitboard)1 << attackedSquare) & enemyKingBB)
+        {
+            return true;
+        }
+    }
+
     return false;
 }
 
@@ -231,12 +252,24 @@ std::uint64_t perftest(const Board& board, int depth, bool whiteTurn) {
                 Bitboard oneSquareForwardBB = (Bitboard)1 << oneSquareForwardIndex;
                 if ((occupancy & oneSquareForwardBB) == 0) {
                     Board newBoard = board;
-                    newBoard.pieces[friendlyPieceOffset] &= ~squareIndexBB;
-                    newBoard.pieces[friendlyPieceOffset] |= oneSquareForwardBB;
-                    // TODO: Handle promotion
-                    newBoard.enPassant = 0; 
+                    newBoard.pieces[friendlyPieceOffset + PAWN_OFFSET] &= ~squareIndexBB;
+                    newBoard.pieces[friendlyPieceOffset + PAWN_OFFSET] |= oneSquareForwardBB;
+                    newBoard.enPassant = 0;
                     if (!underThreat(newBoard, originalKingSquareIndex, !whiteTurn)) {
-                        countLeafNodes += perftest(newBoard, depth - 1, !whiteTurn);
+                        bool isPromotion = (whiteTurn && rank == 6) || (!whiteTurn && rank == 1);
+                        if (isPromotion) {
+                            constexpr int pawnPromotionPieceOffsets[4] = {QUEEN_OFFSET, ROOK_OFFSET, BISHOP_OFFSET, KNIGHT_OFFSET};
+                            for (int i = 0; i < 4; i++)
+                            {
+                                Board promotionBoard = newBoard;
+                                promotionBoard.pieces[friendlyPieceOffset + PAWN_OFFSET] &= ~oneSquareForwardBB;
+                                promotionBoard.pieces[friendlyPieceOffset + pawnPromotionPieceOffsets[i]] |= oneSquareForwardBB;
+                                countLeafNodes += perftest(promotionBoard, depth - 1, !whiteTurn);
+                            }
+                        } 
+                        else {
+                            countLeafNodes += perftest(newBoard, depth - 1, !whiteTurn);
+                        }
                     }
 
                     // Double Push only if single push is possible
@@ -248,9 +281,8 @@ std::uint64_t perftest(const Board& board, int depth, bool whiteTurn) {
                             if ((occupancy & twoSquaresForwardBB) == 0)
                             {
                                 Board doublePushBoard = board;
-                                doublePushBoard.pieces[friendlyPieceOffset] &= ~squareIndexBB;
-                                doublePushBoard.pieces[friendlyPieceOffset] |= twoSquaresForwardBB;
-                                // TODO: Set en passant target square
+                                doublePushBoard.pieces[friendlyPieceOffset + PAWN_OFFSET] &= ~squareIndexBB;
+                                doublePushBoard.pieces[friendlyPieceOffset + PAWN_OFFSET] |= twoSquaresForwardBB;
                                 doublePushBoard.enPassant = twoSquaresForwardIndex;
                                 if (!underThreat(doublePushBoard, originalKingSquareIndex, !whiteTurn)) {
                                     countLeafNodes += perftest(doublePushBoard, depth - 1, !whiteTurn);
@@ -267,21 +299,34 @@ std::uint64_t perftest(const Board& board, int depth, bool whiteTurn) {
                     Bitboard leftDiagBB = (Bitboard)1 << leftDiagIndex;
                     if (enemyOccupancy & leftDiagBB) {
                         Board newBoard = board;
-                        newBoard.pieces[friendlyPieceOffset] &= ~squareIndexBB;
-                        newBoard.pieces[friendlyPieceOffset] |= leftDiagBB;
+                        newBoard.pieces[friendlyPieceOffset + PAWN_OFFSET] &= ~squareIndexBB;
+                        newBoard.pieces[friendlyPieceOffset + PAWN_OFFSET] |= leftDiagBB;
                         removePiece(leftDiagIndex, newBoard, !whiteTurn);
-                        // TODO: Handle promotion
                         newBoard.enPassant = 0;
                         if (!underThreat(newBoard, originalKingSquareIndex, !whiteTurn)) {
-                            countLeafNodes += perftest(newBoard, depth - 1, !whiteTurn);
+                            bool isPromotion = (whiteTurn && rank == 6) || (!whiteTurn && rank == 1);
+                            if (isPromotion) {
+                                constexpr int pawnPromotionPieceOffsets[4] = {QUEEN_OFFSET, ROOK_OFFSET, BISHOP_OFFSET, KNIGHT_OFFSET};
+                                for (int i = 0; i < 4; i++)
+                                {
+                                    Board promotionBoard = newBoard;
+                                    promotionBoard.pieces[friendlyPieceOffset + PAWN_OFFSET] &= ~leftDiagBB;
+                                    promotionBoard.pieces[friendlyPieceOffset + pawnPromotionPieceOffsets[i]] |= leftDiagBB;
+                                    countLeafNodes += perftest(promotionBoard, depth - 1, !whiteTurn);
+                                }
+                            } 
+                            else {
+                                countLeafNodes += perftest(newBoard, depth - 1, !whiteTurn);
+                            }
                         }
                     }
-                    // TODO: Handle en passant capture left
+
+                    // left en passant capture
                     int leftIndex = squareIndex - 1;
                     if (board.enPassant == leftIndex) {
                         Board newBoard = board;
-                        newBoard.pieces[friendlyPieceOffset] &= ~squareIndexBB;
-                        newBoard.pieces[friendlyPieceOffset] |= leftDiagBB;
+                        newBoard.pieces[friendlyPieceOffset + PAWN_OFFSET] &= ~squareIndexBB;
+                        newBoard.pieces[friendlyPieceOffset + PAWN_OFFSET] |= leftDiagBB;
                         removePiece(leftIndex, newBoard, !whiteTurn);
                         newBoard.enPassant = 0; // reset en passant
                         if (!underThreat(newBoard, originalKingSquareIndex, !whiteTurn)) {
@@ -297,21 +342,33 @@ std::uint64_t perftest(const Board& board, int depth, bool whiteTurn) {
                     Bitboard rightDiagBB = (Bitboard)1 << rightDiagIndex;
                     if (enemyOccupancy & rightDiagBB) {
                         Board newBoard = board;
-                        newBoard.pieces[friendlyPieceOffset] &= ~squareIndexBB;
-                        newBoard.pieces[friendlyPieceOffset] |= rightDiagBB;
+                        newBoard.pieces[friendlyPieceOffset + PAWN_OFFSET] &= ~squareIndexBB;
+                        newBoard.pieces[friendlyPieceOffset + PAWN_OFFSET] |= rightDiagBB;
                         removePiece(rightDiagIndex, newBoard, !whiteTurn);
-                        // TODO: Handle promotion
                         newBoard.enPassant = 0;
                         if (!underThreat(newBoard, originalKingSquareIndex, !whiteTurn)) {
-                            countLeafNodes += perftest(newBoard, depth - 1, !whiteTurn);
+                            bool isPromotion = (whiteTurn && rank == 6) || (!whiteTurn && rank == 1);
+                            if (isPromotion) {
+                                constexpr int pawnPromotionPieceOffsets[4] = {QUEEN_OFFSET, ROOK_OFFSET, BISHOP_OFFSET, KNIGHT_OFFSET};
+                                for (int i = 0; i < 4; i++)
+                                {
+                                    Board promotionBoard = newBoard;
+                                    promotionBoard.pieces[friendlyPieceOffset + PAWN_OFFSET] &= ~rightDiagBB;
+                                    promotionBoard.pieces[friendlyPieceOffset + pawnPromotionPieceOffsets[i]] |= rightDiagBB;
+                                    countLeafNodes += perftest(promotionBoard, depth - 1, !whiteTurn);
+                                }
+                            } 
+                            else {
+                                countLeafNodes += perftest(newBoard, depth - 1, !whiteTurn);
+                            }
                         }
                     }
                     // TODO: Handle en passant capture right
                     int rightIndex = squareIndex + 1;
                     if (board.enPassant == rightIndex) {
                         Board newBoard = board;
-                        newBoard.pieces[friendlyPieceOffset] &= ~squareIndexBB;
-                        newBoard.pieces[friendlyPieceOffset] |= rightDiagBB;
+                        newBoard.pieces[friendlyPieceOffset + PAWN_OFFSET] &= ~squareIndexBB;
+                        newBoard.pieces[friendlyPieceOffset + PAWN_OFFSET] |= rightDiagBB;
                         removePiece(rightIndex, newBoard, !whiteTurn);
                         newBoard.enPassant = 0; 
                         if (!underThreat(newBoard, originalKingSquareIndex, !whiteTurn)) {
