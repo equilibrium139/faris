@@ -80,19 +80,35 @@ struct Board {
     std::span<Bitboard, 6> whiteBitboards() { return std::span<Bitboard, 6>{&pieces[WHITE_PIECE_OFFSET], 6}; }
     std::span<Bitboard, 6> blackBitboards() { return std::span<Bitboard, 6>{&pieces[BLACK_PIECE_OFFSET], 6}; }
 
-    Board() {
-        whitePawns = WP_START;
-        whiteKnights = WN_START;
-        whiteBishops = WB_START;
-        whiteRooks = WR_START;
-        whiteQueens = WQ_START;
-        whiteKing = WK_START;
-        blackPawns = BP_START;
-        blackKnights = BN_START;
-        blackBishops = BB_START;
-        blackRooks = BR_START;
-        blackQueens = BQ_START;
-        blackKing = BK_START;
-        enPassant = 0;
+    Board(bool startingPosition = true) {
+        if (startingPosition) {
+            whitePawns = WP_START;
+            whiteKnights = WN_START;
+            whiteBishops = WB_START;
+            whiteRooks = WR_START;
+            whiteQueens = WQ_START;
+            whiteKing = WK_START;
+            blackPawns = BP_START;
+            blackKnights = BN_START;
+            blackBishops = BB_START;
+            blackRooks = BR_START;
+            blackQueens = BQ_START;
+            blackKing = BK_START;
+            enPassant = 0;
+        } else {
+            whitePawns = 0;
+            whiteKnights = 0;
+            whiteBishops = 0;
+            whiteRooks = 0;
+            whiteQueens = 0;
+            whiteKing = 0;
+            blackPawns = 0;
+            blackKnights = 0;
+            blackBishops = 0;
+            blackRooks = 0;
+            blackQueens = 0;
+            blackKing = 0;
+            enPassant = 0;
+        }
     }
 };

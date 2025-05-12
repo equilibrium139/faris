@@ -15,6 +15,19 @@
             }
         },
         {
+            "name": "wsl-release",
+            "displayName": "WSL Release (GCC)",
+            "description": "Release build for WSL using GCC/G++.",
+            "generator": "Ninja",
+            "binaryDir": "${sourceDir}/build/wsl-release",
+            "cacheVariables": {
+                "CMAKE_BUILD_TYPE": "Release",
+                "CMAKE_C_COMPILER": "gcc",
+                "CMAKE_CXX_COMPILER": "g++",
+                "CMAKE_EXPORT_COMPILE_COMMANDS": "ON"
+            }
+        },
+        {
             "name": "wsl-release-debug",
             "displayName": "WSL RelWithDebInfo (GCC)",
             "description": "Release with Debug Info build for WSL using GCC/G++.",
