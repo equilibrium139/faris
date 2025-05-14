@@ -34,3 +34,15 @@ void prettyPrint(const Board& board) {
     }
     std::cout << "\n\n";
 }
+
+Piece pieceAt(int squareIndex, const Board &board) {
+    Bitboard squareIndexBB = (Bitboard)1 << squareIndex;
+    for (int i = 0; i < COUNT_BITBOARDS; i++)
+    {
+        if (squareIndexBB & board.pieces[i])
+        {
+            return i < 6 ? Piece{PieceType(i), true} : Piece{PieceType(i - 6), false};
+        }
+    }
+    return {PieceType::None};
+}

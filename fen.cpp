@@ -149,7 +149,7 @@ Fen parseFEN(const std::string& fenStr) {
         if (file < 0 || file > 7 || rank < 0 || rank > 7) {
             throw std::invalid_argument("Invalid FEN format");
         }
-        board.enPassant = (Bitboard)1 << (rank * 8 + file);
+        board.enPassant = rank * 8 + file;
         fenIdx += 2;
     }
 
@@ -175,4 +175,84 @@ Fen parseFEN(const std::string& fenStr) {
     }
 
     return fen;
+}
+
+std::string toFen(const Fen& fen) {
+    std::string fenStr;
+    char nextChar = '0';
+    for (int rank = 7; rank >= 0; rank--) {
+        for (int file = 0; file < 8; file++) {
+            int squareIndex = rank * 8 + file;
+            Piece piece = pieceAt(squareIndex, fen.board);
+            if (piece.type == PieceType::None) {
+                if (!fenStr.empty() && std::isdigit(fenStr.back())) {
+                    fenStr.back()++;
+                } else {
+                    fenStr += '1';
+                }
+            } else {
+                switch (piece.type) {
+                    case PieceType::Pawn:
+                        fenStr += piece.color ? 'P' : 'p';
+                        break;
+                    case PieceType::Knight:
+                        fenStr += piece.color ? 'N' : 'n';
+                        break;
+                    case PieceType::Bishop:
+                        fenStr += piece.color ? 'B' : 'b';
+                        break;
+                    case PieceType::Rook:
+                        fenStr += piece.color ? 'R' : 'r';
+                        break;
+                    case PieceType::Queen:
+                        fenStr += piece.color ? 'Q' : 'q';
+                        break;
+                    case PieceType::King:   
+                        fenStr += piece.color ? 'K' : 'k';
+                        break;
+                    default:
+                        throw std::invalid_argument("Invalid piece type");
+                }
+            }
+        } 
+        fenStr += '/';
+    }
+
+    fenStr.pop_back(); // Remove the last '/'
+    fenStr += ' ';
+    fenStr += fen.whiteTurn ? 'w' : 'b';
+    fenStr += ' ';
+    if (fen.board.whiteKingsideCastlingRight) {
+        fenStr += 'K';
+    }
+    if (fen.board.whiteQueensideCastlingRight) {
+        fenStr += 'Q';
+    }
+    if (fen.board.blackKingsideCastlingRight) {
+        fenStr += 'k';
+    }
+    if (fen.board.blackQueensideCastlingRight) {
+        fenStr += 'q';
+    }
+    if (fenStr.back() == ' ') {
+        fenStr += '-';
+    } 
+    fenStr += ' ';
+    if (fen.board.enPassant == 0) {
+        fenStr += '-';
+    } else {
+        int file = fen.board.enPassant % 8;
+        int rank = fen.board.enPassant / 8;
+        if (fen.whiteTurn) {
+            rank++;
+        } else {
+            rank--;
+        }
+        fenStr += 'a' + file;
+        fenStr += '1' + rank;
+    }
+    fenStr += ' ';
+    fenStr += std::to_string(fen.halfmoveClock) + ' ';
+    fenStr += std::to_string(fen.fullmoveNumber);
+    return fenStr;
 }
