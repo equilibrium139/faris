@@ -7,6 +7,21 @@
 // TODO: take into account castling, en passant, promotion, check, checkmate,
 // stalemate, draw.
 
+int incrementCastles() {
+    static int castles = 0;
+    return ++castles;
+}
+
+int incrementCaptures() {
+    static int captures = 0;
+    return ++captures;
+}
+
+int incrementEnPassant() {
+    static int enPassant = 0;
+    return ++enPassant;
+}
+
 // TODO: use uint8_t for squareIndex
 void removePiece(int squareIndex, std::span<Bitboard, 6> pieces) {
     assert(squareIndex >= 0 && squareIndex < 64);
@@ -22,16 +37,10 @@ void removePiece(int squareIndex, std::span<Bitboard, 6> pieces) {
 void removePiece(int squareIndex, Board& board, bool white) {
     assert(squareIndex >= 0 && squareIndex < 64);
     removePiece(squareIndex, white ? board.whiteBitboards() : board.blackBitboards());
-}
-
-static Piece pieceAt(int squareIndex, const Board& board) {
-    Bitboard squareIndexBB = (Bitboard)1 << squareIndex;
-    for (int i = 0; i < COUNT_BITBOARDS; i++) {
-        if (squareIndexBB & board.pieces[i]) {
-            return i < 6 ? Piece{ PieceType(i), true } : Piece{ PieceType(i - 6), false}; 
-        }
-    }
-    return {PieceType::None};
+    board.whiteKingsideCastlingRight = board.whiteKingsideCastlingRight && squareIndex != 7;
+    board.whiteQueensideCastlingRight = board.whiteQueensideCastlingRight && squareIndex != 0;
+    board.blackKingsideCastlingRight = board.blackKingsideCastlingRight && squareIndex != 63;
+    board.blackQueensideCastlingRight = board.blackQueensideCastlingRight && squareIndex != 56;
 }
 
 static bool underThreat(const Board &board, int squareIndex, bool threatColor) {
@@ -205,6 +214,8 @@ static bool underThreat(const Board &board, int squareIndex, bool threatColor) {
     return false;
 }
 
+// This 
+
 // TODO: make move arrays constexpr
 // TODO: change whiteTurn to color and don't hardcode 0/1 for black/white
 std::uint64_t perftest(const Board& board, int depth, bool whiteTurn) {
@@ -312,10 +323,12 @@ std::uint64_t perftest(const Board& board, int depth, bool whiteTurn) {
                                     Board promotionBoard = newBoard;
                                     promotionBoard.pieces[friendlyPieceOffset + PAWN_OFFSET] &= ~leftDiagBB;
                                     promotionBoard.pieces[friendlyPieceOffset + pawnPromotionPieceOffsets[i]] |= leftDiagBB;
+                                    if (depth == 1) incrementCaptures();
                                     countLeafNodes += perftest(promotionBoard, depth - 1, !whiteTurn);
                                 }
-                            } 
+                            }
                             else {
+                                if (depth == 1) incrementCaptures();
                                 countLeafNodes += perftest(newBoard, depth - 1, !whiteTurn);
                             }
                         }
@@ -330,6 +343,8 @@ std::uint64_t perftest(const Board& board, int depth, bool whiteTurn) {
                         removePiece(leftIndex, newBoard, !whiteTurn);
                         newBoard.enPassant = 0; // reset en passant
                         if (!underThreat(newBoard, originalKingSquareIndex, !whiteTurn)) {
+                            if (depth == 1) incrementEnPassant();
+                            if (depth == 1) incrementCaptures();
                             countLeafNodes += perftest(newBoard, depth - 1, !whiteTurn);
                         }
                     }
@@ -355,15 +370,17 @@ std::uint64_t perftest(const Board& board, int depth, bool whiteTurn) {
                                     Board promotionBoard = newBoard;
                                     promotionBoard.pieces[friendlyPieceOffset + PAWN_OFFSET] &= ~rightDiagBB;
                                     promotionBoard.pieces[friendlyPieceOffset + pawnPromotionPieceOffsets[i]] |= rightDiagBB;
+                                    if (depth == 1) incrementCaptures();
                                     countLeafNodes += perftest(promotionBoard, depth - 1, !whiteTurn);
                                 }
                             } 
                             else {
+                                if (depth == 1) incrementCaptures();
                                 countLeafNodes += perftest(newBoard, depth - 1, !whiteTurn);
                             }
                         }
                     }
-                    // TODO: Handle en passant capture right
+                    // en passant capture right
                     int rightIndex = squareIndex + 1;
                     if (board.enPassant == rightIndex) {
                         Board newBoard = board;
@@ -372,6 +389,8 @@ std::uint64_t perftest(const Board& board, int depth, bool whiteTurn) {
                         removePiece(rightIndex, newBoard, !whiteTurn);
                         newBoard.enPassant = 0; 
                         if (!underThreat(newBoard, originalKingSquareIndex, !whiteTurn)) {
+                            if (depth == 1) incrementEnPassant();
+                            if (depth == 1) incrementCaptures();
                             countLeafNodes += perftest(newBoard, depth - 1, !whiteTurn);
                         }
                     }
@@ -403,13 +422,17 @@ std::uint64_t perftest(const Board& board, int depth, bool whiteTurn) {
                     Board newBoard = board;
                     newBoard.pieces[friendlyPieceOffset + KNIGHT_OFFSET] &= ~squareIndexBB; // Remove knight from original square
                     newBoard.pieces[friendlyPieceOffset + KNIGHT_OFFSET] |= newSquareBB;    // Place knight on new square
-                    
+                    bool isCapture = false;
                     if (enemyOccupancy & newSquareBB) { 
                         removePiece(newSquareIndex, newBoard, !whiteTurn);
+                        isCapture = true;
                     }
                     
                     newBoard.enPassant = 0; 
                     if (!underThreat(newBoard, originalKingSquareIndex, !whiteTurn)) {
+                        if (isCapture && depth == 1) {
+                            incrementCaptures();
+                        }
                         countLeafNodes += perftest(newBoard, depth - 1, !whiteTurn);
                     }
                 }
@@ -488,7 +511,7 @@ std::uint64_t perftest(const Board& board, int depth, bool whiteTurn) {
                                         }
                                     }
                                 }
-
+                                if (depth == 1) incrementCaptures();
                                 countLeafNodes += perftest(newBoard, depth - 1, !whiteTurn);
                             }
                             break; // Stop sliding after capturing an enemy piece
@@ -549,10 +572,11 @@ std::uint64_t perftest(const Board& board, int depth, bool whiteTurn) {
                     newBoard.pieces[friendlyPieceOffset + KING_OFFSET] &= ~squareIndexBB; // Remove king from original square
                     newBoard.pieces[friendlyPieceOffset + KING_OFFSET] |= newSquareBB;    // Place king on new square
 
+                    bool isCapture = false;
                     if (enemyOccupancy & newSquareBB) {
                         removePiece(newSquareIndex, newBoard, !whiteTurn);
+                        isCapture = true;
                     }
-                    newBoard.enPassant = 0;
                     if (!underThreat(newBoard, newSquareIndex, !whiteTurn)) {
                         if (whiteTurn) {
                             newBoard.whiteKingsideCastlingRight = false;
@@ -564,11 +588,12 @@ std::uint64_t perftest(const Board& board, int depth, bool whiteTurn) {
                         // TODO: find a better way to handle resetting en passant. This is error 
                         // prone because it has to be done every recursive call
                         newBoard.enPassant = 0;
+                        if (depth == 1 && isCapture) incrementCaptures();
                         countLeafNodes += perftest(newBoard, depth - 1, !whiteTurn);
                     }
                 }
             }
-            // TODO: Add castling logic
+
             bool kingsideCastlingRight = whiteTurn ? board.whiteKingsideCastlingRight : board.blackKingsideCastlingRight;
             bool queensideCastlingRight = whiteTurn ? board.whiteQueensideCastlingRight : board.blackQueensideCastlingRight;
             if (kingsideCastlingRight) {
@@ -594,6 +619,7 @@ std::uint64_t perftest(const Board& board, int depth, bool whiteTurn) {
                         }
                         // no need to check for threat, already checked above
                         newBoard.enPassant = 0;
+                        if (depth == 1) incrementCastles();
                         countLeafNodes += perftest(newBoard, depth - 1, !whiteTurn);
                     }               
                 }
@@ -621,6 +647,7 @@ std::uint64_t perftest(const Board& board, int depth, bool whiteTurn) {
                             newBoard.blackQueensideCastlingRight = false;
                         }
                         newBoard.enPassant = 0;
+                        if (depth == 1) incrementCastles();
                         countLeafNodes += perftest(newBoard, depth - 1, !whiteTurn);
                     }               
                 }
