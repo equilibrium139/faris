@@ -697,9 +697,11 @@ std::uint64_t perftest(const Board& board, int depth, bool whiteTurn) {
                                          underThreat(board, originalKingSquareIndex + 2, !whiteTurn);
                     if (!enemyPrevents) {
                         Board newBoard = board;
+                        int newSquareIndex = squareIndex + 2;
+                        Bitboard kingsideRookBB = (Bitboard)1 << kingsideRookSquareIndex;
                         newBoard.pieces[friendlyPieceOffset + KING_OFFSET] &= ~squareIndexBB; // Remove king from original square
                         newBoard.pieces[friendlyPieceOffset + KING_OFFSET] |= (Bitboard)1 << (squareIndex + 2); // Place king on new square
-                        newBoard.pieces[friendlyPieceOffset + ROOK_OFFSET] &= ~(Bitboard)1 << kingsideRookSquareIndex; // Remove rook from original square
+                        newBoard.pieces[friendlyPieceOffset + ROOK_OFFSET] &= ~kingsideRookBB; // Remove rook from original square
                         newBoard.pieces[friendlyPieceOffset + ROOK_OFFSET] |= (Bitboard)1 << (squareIndex + 1); // Place rook on new square
                         if (whiteTurn) {
                             newBoard.whiteKingsideCastlingRight = false;
@@ -731,9 +733,11 @@ std::uint64_t perftest(const Board& board, int depth, bool whiteTurn) {
                                          underThreat(board, originalKingSquareIndex - 2, !whiteTurn);
                     if (!enemyPrevents) {
                         Board newBoard = board;
+                        int newSquareIndex = squareIndex - 2;
+                        Bitboard queensideRookBB = (Bitboard)1 << queensideRookSquareIndex;
                         newBoard.pieces[friendlyPieceOffset + KING_OFFSET] &= ~squareIndexBB; // Remove king from original square
                         newBoard.pieces[friendlyPieceOffset + KING_OFFSET] |= (Bitboard)1 << (squareIndex - 2); // Place king on new square
-                        newBoard.pieces[friendlyPieceOffset + ROOK_OFFSET] &= ~(Bitboard)1 << queensideRookSquareIndex; // Remove rook from original square
+                        newBoard.pieces[friendlyPieceOffset + ROOK_OFFSET] &= ~queensideRookBB; // Remove rook from original square
                         newBoard.pieces[friendlyPieceOffset + ROOK_OFFSET] |= (Bitboard)1 << (squareIndex - 1); // Place rook on new square
                         // no need to check for threat, already checked above
                         if (whiteTurn) {
