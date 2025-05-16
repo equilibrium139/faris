@@ -71,6 +71,17 @@ struct Board {
         return blackPawns | blackKnights | blackBishops | blackRooks | blackQueens | blackKing;
     }
 
+    bool valid() const {
+        for (int i = 0; i < COUNT_BITBOARDS; i++) {
+            for (int j = i + 1; j < COUNT_BITBOARDS; j++) {
+                if ((pieces[i] & pieces[j]) != 0) {
+                    return false;
+                }
+            }
+        }
+        return true;
+    }
+
     std::uint64_t allPieces() const { return whitePieces() | blackPieces(); }
 
     std::uint64_t emptySquares() const { return ~allPieces(); }
@@ -79,6 +90,25 @@ struct Board {
     std::span<const Bitboard, 6> blackBitboards() const { return std::span<const Bitboard, 6>{&pieces[BLACK_PIECE_OFFSET], 6}; }
     std::span<Bitboard, 6> whiteBitboards() { return std::span<Bitboard, 6>{&pieces[WHITE_PIECE_OFFSET], 6}; }
     std::span<Bitboard, 6> blackBitboards() { return std::span<Bitboard, 6>{&pieces[BLACK_PIECE_OFFSET], 6}; }
+
+    bool operator==(const Board& other) const {
+        return whitePawns == other.whitePawns &&
+               whiteKnights == other.whiteKnights &&
+               whiteBishops == other.whiteBishops &&
+               whiteRooks == other.whiteRooks &&
+               whiteQueens == other.whiteQueens &&
+               whiteKing == other.whiteKing &&
+               blackPawns == other.blackPawns &&
+               blackKnights == other.blackKnights &&
+               blackBishops == other.blackBishops &&
+               blackRooks == other.blackRooks &&
+               blackQueens == other.blackQueens &&
+               blackKing == other.blackKing &&
+               enPassant == other.enPassant;
+    }
+    bool operator!=(const Board& other) const {
+        return !(*this == other);
+    }
 
     Board(bool startingPosition = true) {
         if (startingPosition) {

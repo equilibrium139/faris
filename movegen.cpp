@@ -3,9 +3,12 @@
 #include <cmath>
 #include <span>
 #include "utilities.h"
+#include "fen.h"
 
 // TODO: take into account castling, en passant, promotion, check, checkmate,
 // stalemate, draw.
+
+#define PRINT_DIAGNOSTICS
 
 int incrementCastles() {
     static int castles = 0;
@@ -214,11 +217,23 @@ static bool underThreat(const Board &board, int squareIndex, bool threatColor) {
     return false;
 }
 
-// This 
+static void printMoveWithCount(int fromSquareIndex, int toSquareIndex, std::uint64_t count) {
+    int fromFile = fromSquareIndex % 8;
+    int fromRank = fromSquareIndex / 8;
+    int toFile = toSquareIndex % 8;
+    int toRank = toSquareIndex / 8;
+    char fromFileChar = 'a' + fromFile;
+    char toFileChar = 'a' + toFile;
+    std::cout << fromFileChar << fromRank + 1 << toFileChar << toRank + 1 << ": " << count << '\n';
+}
 
 // TODO: make move arrays constexpr
 // TODO: change whiteTurn to color and don't hardcode 0/1 for black/white
 std::uint64_t perftest(const Board& board, int depth, bool whiteTurn) {
+    Fen fen = {board, 0, 1, whiteTurn};
+    std::string fenStr = toFen(fen);
+    Fen strToFen = parseFEN(fenStr);
+    assert(strToFen.board == board);
     if (depth == 0) {
         return 1;
     }
@@ -275,11 +290,23 @@ std::uint64_t perftest(const Board& board, int depth, bool whiteTurn) {
                                 Board promotionBoard = newBoard;
                                 promotionBoard.pieces[friendlyPieceOffset + PAWN_OFFSET] &= ~oneSquareForwardBB;
                                 promotionBoard.pieces[friendlyPieceOffset + pawnPromotionPieceOffsets[i]] |= oneSquareForwardBB;
-                                countLeafNodes += perftest(promotionBoard, depth - 1, !whiteTurn);
+                                std::uint64_t movePerftCount = perftest(promotionBoard, depth - 1, !whiteTurn);
+                                #ifdef PRINT_DIAGNOSTICS
+                                if (depth == maxDepth) {
+                                    printMoveWithCount(squareIndex, oneSquareForwardIndex, movePerftCount);
+                                }
+                                #endif
+                                countLeafNodes += movePerftCount;
                             }
                         } 
                         else {
-                            countLeafNodes += perftest(newBoard, depth - 1, !whiteTurn);
+                            std::uint64_t movePerftCount = perftest(newBoard, depth - 1, !whiteTurn);
+                            #ifdef PRINT_DIAGNOSTICS
+                            if (depth == maxDepth) {
+                                printMoveWithCount(squareIndex, oneSquareForwardIndex, movePerftCount);
+                            }
+                            #endif
+                            countLeafNodes += movePerftCount;
                         }
                     }
 
@@ -296,7 +323,13 @@ std::uint64_t perftest(const Board& board, int depth, bool whiteTurn) {
                                 doublePushBoard.pieces[friendlyPieceOffset + PAWN_OFFSET] |= twoSquaresForwardBB;
                                 doublePushBoard.enPassant = twoSquaresForwardIndex;
                                 if (!underThreat(doublePushBoard, originalKingSquareIndex, !whiteTurn)) {
-                                    countLeafNodes += perftest(doublePushBoard, depth - 1, !whiteTurn);
+                                    std::uint64_t movePerftCount = perftest(doublePushBoard, depth - 1, !whiteTurn);
+                                    #ifdef PRINT_DIAGNOSTICS
+                                    if (depth == maxDepth) {
+                                        printMoveWithCount(squareIndex, twoSquaresForwardIndex, movePerftCount);
+                                    }
+                                    #endif
+                                    countLeafNodes += movePerftCount;
                                 }
                             }
                         }
@@ -323,13 +356,25 @@ std::uint64_t perftest(const Board& board, int depth, bool whiteTurn) {
                                     Board promotionBoard = newBoard;
                                     promotionBoard.pieces[friendlyPieceOffset + PAWN_OFFSET] &= ~leftDiagBB;
                                     promotionBoard.pieces[friendlyPieceOffset + pawnPromotionPieceOffsets[i]] |= leftDiagBB;
+                                    std::uint64_t movePerftCount = perftest(promotionBoard, depth - 1, !whiteTurn);
+                                    #ifdef PRINT_DIAGNOSTICS
                                     if (depth == 1) incrementCaptures();
-                                    countLeafNodes += perftest(promotionBoard, depth - 1, !whiteTurn);
+                                    if (depth == maxDepth) {
+                                        printMoveWithCount(squareIndex, leftDiagIndex, movePerftCount);
+                                    }
+                                    #endif
+                                    countLeafNodes += movePerftCount;
                                 }
                             }
                             else {
+                                std::uint64_t movePerftCount = perftest(newBoard, depth - 1, !whiteTurn);
+                                #ifdef PRINT_DIAGNOSTICS
                                 if (depth == 1) incrementCaptures();
-                                countLeafNodes += perftest(newBoard, depth - 1, !whiteTurn);
+                                if (depth == maxDepth) {
+                                    printMoveWithCount(squareIndex, leftDiagIndex, movePerftCount);
+                                }
+                                #endif
+                                countLeafNodes += movePerftCount;
                             }
                         }
                     }
@@ -343,9 +388,15 @@ std::uint64_t perftest(const Board& board, int depth, bool whiteTurn) {
                         removePiece(leftIndex, newBoard, !whiteTurn);
                         newBoard.enPassant = 0; // reset en passant
                         if (!underThreat(newBoard, originalKingSquareIndex, !whiteTurn)) {
+                            std::uint64_t movePerftCount = perftest(newBoard, depth - 1, !whiteTurn);
+                            #ifdef PRINT_DIAGNOSTICS
                             if (depth == 1) incrementEnPassant();
                             if (depth == 1) incrementCaptures();
-                            countLeafNodes += perftest(newBoard, depth - 1, !whiteTurn);
+                            if (depth == maxDepth) {
+                                printMoveWithCount(squareIndex, leftDiagIndex, movePerftCount);
+                            }
+                            #endif
+                            countLeafNodes += movePerftCount;
                         }
                     }
                 }
@@ -370,13 +421,25 @@ std::uint64_t perftest(const Board& board, int depth, bool whiteTurn) {
                                     Board promotionBoard = newBoard;
                                     promotionBoard.pieces[friendlyPieceOffset + PAWN_OFFSET] &= ~rightDiagBB;
                                     promotionBoard.pieces[friendlyPieceOffset + pawnPromotionPieceOffsets[i]] |= rightDiagBB;
+                                    std::uint64_t movePerftCount = perftest(promotionBoard, depth - 1, !whiteTurn);
+                                    #ifdef PRINT_DIAGNOSTICS
                                     if (depth == 1) incrementCaptures();
-                                    countLeafNodes += perftest(promotionBoard, depth - 1, !whiteTurn);
+                                    if (depth == maxDepth) {
+                                        printMoveWithCount(squareIndex, rightDiagIndex, movePerftCount);
+                                    }
+                                    #endif
+                                    countLeafNodes += movePerftCount;
                                 }
                             } 
                             else {
+                                std::uint64_t movePerftCount = perftest(newBoard, depth - 1, !whiteTurn);
+                                #ifdef PRINT_DIAGNOSTICS
                                 if (depth == 1) incrementCaptures();
-                                countLeafNodes += perftest(newBoard, depth - 1, !whiteTurn);
+                                if (depth == maxDepth) {
+                                    printMoveWithCount(squareIndex, rightDiagIndex, movePerftCount);
+                                }
+                                #endif
+                                countLeafNodes += movePerftCount;
                             }
                         }
                     }
@@ -389,9 +452,15 @@ std::uint64_t perftest(const Board& board, int depth, bool whiteTurn) {
                         removePiece(rightIndex, newBoard, !whiteTurn);
                         newBoard.enPassant = 0; 
                         if (!underThreat(newBoard, originalKingSquareIndex, !whiteTurn)) {
+                            std::uint64_t movePerftCount = perftest(newBoard, depth - 1, !whiteTurn);
+                            #ifdef PRINT_DIAGNOSTICS
                             if (depth == 1) incrementEnPassant();
                             if (depth == 1) incrementCaptures();
-                            countLeafNodes += perftest(newBoard, depth - 1, !whiteTurn);
+                            if (depth == maxDepth) {
+                                printMoveWithCount(squareIndex, rightDiagIndex, movePerftCount);
+                            }
+                            #endif
+                            countLeafNodes += movePerftCount;
                         }
                     }
                 }
@@ -430,10 +499,14 @@ std::uint64_t perftest(const Board& board, int depth, bool whiteTurn) {
                     
                     newBoard.enPassant = 0; 
                     if (!underThreat(newBoard, originalKingSquareIndex, !whiteTurn)) {
-                        if (isCapture && depth == 1) {
-                            incrementCaptures();
+                        std::uint64_t movePerftCount = perftest(newBoard, depth - 1, !whiteTurn);
+                        #ifdef PRINT_DIAGNOSTICS
+                        if (isCapture && depth == 1) incrementCaptures();
+                        if (depth == maxDepth) {
+                            printMoveWithCount(squareIndex, newSquareIndex, movePerftCount);
                         }
-                        countLeafNodes += perftest(newBoard, depth - 1, !whiteTurn);
+                        #endif
+                        countLeafNodes += movePerftCount;
                     }
                 }
             }
@@ -490,11 +563,13 @@ std::uint64_t perftest(const Board& board, int depth, bool whiteTurn) {
 
                         Board newBoard = board;
                         newBoard.pieces[friendlyPieceOffset + pieceInfo.pieceIndex] &= ~squareIndexBB; 
-                        newBoard.pieces[friendlyPieceOffset + pieceInfo.pieceIndex] |= newSquareBB;  
+                        newBoard.pieces[friendlyPieceOffset + pieceInfo.pieceIndex] |= newSquareBB;
+                        // TODO: these two blocks can be combined with a break if it's a capture
                         if (enemyOccupancy & newSquareBB) {
                             removePiece(newSquareIndex, newBoard, !whiteTurn);
                             
                             newBoard.enPassant = 0; 
+                            
                             if (!underThreat(newBoard, originalKingSquareIndex, !whiteTurn)) {
                                 if (pieceInfo.pieceIndex == ROOK_OFFSET) {
                                     if (squareIndex == kingsideRookSquareIndex) {
@@ -511,8 +586,14 @@ std::uint64_t perftest(const Board& board, int depth, bool whiteTurn) {
                                         }
                                     }
                                 }
+                                std::uint64_t movePerftCount = perftest(newBoard, depth - 1, !whiteTurn);
+                                #ifdef PRINT_DIAGNOSTICS
                                 if (depth == 1) incrementCaptures();
-                                countLeafNodes += perftest(newBoard, depth - 1, !whiteTurn);
+                                if (depth == maxDepth) {
+                                    printMoveWithCount(squareIndex, newSquareIndex, movePerftCount);
+                                }
+                                #endif
+                                countLeafNodes += movePerftCount;
                             }
                             break; // Stop sliding after capturing an enemy piece
                         } else {
@@ -533,8 +614,13 @@ std::uint64_t perftest(const Board& board, int depth, bool whiteTurn) {
                                         }
                                     }
                                 }
-
-                                countLeafNodes += perftest(newBoard, depth - 1, !whiteTurn);
+                                std::uint64_t movePerftCount = perftest(newBoard, depth - 1, !whiteTurn);
+                                #ifdef PRINT_DIAGNOSTICS
+                                if (depth == maxDepth) {
+                                    printMoveWithCount(squareIndex, newSquareIndex, movePerftCount);
+                                }
+                                #endif
+                                countLeafNodes += movePerftCount;
                             }
                         }
                     }
@@ -588,8 +674,14 @@ std::uint64_t perftest(const Board& board, int depth, bool whiteTurn) {
                         // TODO: find a better way to handle resetting en passant. This is error 
                         // prone because it has to be done every recursive call
                         newBoard.enPassant = 0;
+                        std::uint64_t movePerftCount = perftest(newBoard, depth - 1, !whiteTurn);
+                        #ifdef PRINT_DIAGNOSTICS
                         if (depth == 1 && isCapture) incrementCaptures();
-                        countLeafNodes += perftest(newBoard, depth - 1, !whiteTurn);
+                        if (depth == maxDepth) {
+                            printMoveWithCount(squareIndex, newSquareIndex, movePerftCount);
+                        }
+                        #endif
+                        countLeafNodes += movePerftCount;
                     }
                 }
             }
@@ -599,7 +691,6 @@ std::uint64_t perftest(const Board& board, int depth, bool whiteTurn) {
             if (kingsideCastlingRight) {
                 bool squaresVacant = (occupancy & ((Bitboard)1 << (squareIndex + 1))) == 0 &&
                                      (occupancy & ((Bitboard)1 << (squareIndex + 2))) == 0;
-                constexpr int kingsideRookFile = 7; 
                 if (squaresVacant) {
                     bool enemyPrevents = underThreat(board, originalKingSquareIndex, !whiteTurn)     ||
                                          underThreat(board, originalKingSquareIndex + 1, !whiteTurn) ||
@@ -619,9 +710,15 @@ std::uint64_t perftest(const Board& board, int depth, bool whiteTurn) {
                         }
                         // no need to check for threat, already checked above
                         newBoard.enPassant = 0;
+                        std::uint64_t movePerftCount = perftest(newBoard, depth - 1, !whiteTurn);
+                        #ifdef PRINT_DIAGNOSTICS
                         if (depth == 1) incrementCastles();
-                        countLeafNodes += perftest(newBoard, depth - 1, !whiteTurn);
-                    }               
+                        if (depth == maxDepth) {
+                            printMoveWithCount(squareIndex, newSquareIndex, movePerftCount);
+                        }
+                        #endif
+                        countLeafNodes += movePerftCount;
+                    }
                 }
             }
             if (queensideCastlingRight) {
@@ -647,9 +744,15 @@ std::uint64_t perftest(const Board& board, int depth, bool whiteTurn) {
                             newBoard.blackQueensideCastlingRight = false;
                         }
                         newBoard.enPassant = 0;
+                        std::uint64_t movePerftCount = perftest(newBoard, depth - 1, !whiteTurn);
+                        #ifdef PRINT_DIAGNOSTICS
                         if (depth == 1) incrementCastles();
-                        countLeafNodes += perftest(newBoard, depth - 1, !whiteTurn);
-                    }               
+                        if (depth == maxDepth) {
+                            printMoveWithCount(squareIndex, newSquareIndex, movePerftCount);
+                        }
+                        #endif
+                        countLeafNodes += movePerftCount;
+                    }
                 }
             }
             break; // Only one king per side
