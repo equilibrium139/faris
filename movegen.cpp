@@ -228,10 +228,6 @@ static void printMoveWithCount(int fromSquareIndex, int toSquareIndex, std::uint
 // TODO: make move arrays constexpr
 // TODO: change whiteTurn to color and don't hardcode 0/1 for black/white
 std::uint64_t perftest(const Board& board, int depth, bool whiteTurn) {
-    Fen fen = {board, 0, 1, whiteTurn};
-    std::string fenStr = toFen(fen);
-    Fen strToFen = parseFEN(fenStr);
-    assert(strToFen.board == board);
     if (depth == 0) {
         return 1;
     }
