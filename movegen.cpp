@@ -8,8 +8,6 @@
 // TODO: take into account castling, en passant, promotion, check, checkmate,
 // stalemate, draw.
 
-#define PRINT_DIAGNOSTICS
-
 int incrementCastles() {
     static int castles = 0;
     return ++castles;
