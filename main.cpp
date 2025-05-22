@@ -34,8 +34,10 @@ int main(int argc, char** argv) {
     std::cout << "Fullmove number: " << fen.fullmoveNumber << '\n';
     std::uint64_t perftCount = perftest(fen.board, maxDepth, fen.whiteTurn);
     std::cout << "perftest(" << maxDepth << "): " << perftCount << '\n';
+    #ifdef PRINT_DIAGNOSTICS
     std::cout << "Castles: " << incrementCastles() - 1 << '\n';
     std::cout << "Captures: " << incrementCaptures() - 1 << '\n';
     std::cout << "En passant: " << incrementEnPassant() - 1 << '\n';
+    #endif
     return 0;
 }
