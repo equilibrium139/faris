@@ -1,29 +1,32 @@
 #include "movegen.h"
 #include <cassert>
 #include <cmath>
+#include <iostream>
 #include <span>
+#include "board.h"
 #include "utilities.h"
 #include "fen.h"
 
 // TODO: take into account castling, en passant, promotion, check, checkmate,
 // stalemate, draw.
 
-int incrementCastles() {
+int IncrementCastles() {
     static int castles = 0;
     return ++castles;
 }
 
-int incrementCaptures() {
+int IncrementCaptures() {
     static int captures = 0;
     return ++captures;
 }
 
-int incrementEnPassant() {
+int IncrementEnPassant() {
     static int enPassant = 0;
     return ++enPassant;
 }
 
 // TODO: use uint8_t for squareIndex
+// TODO: move to Board, or move all these low-level methods that operate on Board to a different file
 void removePiece(int squareIndex, std::span<Bitboard, 6> pieces) {
     assert(squareIndex >= 0 && squareIndex < 64);
     Bitboard captureSquareBB = (Bitboard)1 << squareIndex;
@@ -35,28 +38,40 @@ void removePiece(int squareIndex, std::span<Bitboard, 6> pieces) {
     }
 }
 
-void removePiece(int squareIndex, Board& board, bool white) {
+void removePiece(int squareIndex, Board& board, Color colorToRemove) {
     assert(squareIndex >= 0 && squareIndex < 64);
-    removePiece(squareIndex, white ? board.whiteBitboards() : board.blackBitboards());
+    removePiece(squareIndex, board.Bitboards(colorToRemove));
     board.whiteKingsideCastlingRight = board.whiteKingsideCastlingRight && squareIndex != 7;
     board.whiteQueensideCastlingRight = board.whiteQueensideCastlingRight && squareIndex != 0;
     board.blackKingsideCastlingRight = board.blackKingsideCastlingRight && squareIndex != 63;
     board.blackQueensideCastlingRight = board.blackQueensideCastlingRight && squareIndex != 56;
 }
+/*
+static bool underThreat(const Board& board, int squareIndex, Color threatColor, bool temp) {
+    if (knightAttacks[squareIndex] & board.knights[threatColor]) return true;
+    if (pawnAttacks[threatColor][squareIndex] & board.pawns[threatColor]) return true;
+    if (kingAttacks[sq] & board.kings[threatColor]) return true;
+    Bitboard occupancy = board.allPieces();
+    if (bishopAttacks[squareIndex][occupancy] & (board.bishops[threatColor] | board.queens[threatColor])) return true;
+    if (rookAttacks[squareIndex][occupancy] & (board.rooks[threatColor] | board.queens[threatColor])) return true;
 
-static bool underThreat(const Board &board, int squareIndex, bool threatColor) {
+    return false;
+}
+*/
+
+static bool underThreat(const Board &board, int squareIndex, Color threatColor) {
     Bitboard bb = (Bitboard)1 << squareIndex;
 
     // Check up, down, left, right for rook/queen
-    Bitboard enemyQueenBB = threatColor ? board.whiteQueens : board.blackQueens;
-	Bitboard enemyRookBB = threatColor ? board.whiteRooks : board.blackRooks;
-    Bitboard occupancy = board.allPieces();
+    Bitboard enemyQueenBB = board.Queens(threatColor);
+    Bitboard enemyRookBB = board.Rooks(threatColor);
+    Bitboard occupancy = board.Occupancy();
     const int squareRank = squareIndex / 8;
     const int squareFile = squareIndex % 8;
     for (int rank = squareRank + 1; rank < 8; rank++)
     {
         int index = rank * 8 + squareFile;
-		Bitboard indexBB = (Bitboard)1 << index;
+        Bitboard indexBB = (Bitboard)1 << index;
         if ((enemyQueenBB & indexBB) || (enemyRookBB & indexBB)) {
             return true;
         }
@@ -99,7 +114,7 @@ static bool underThreat(const Board &board, int squareIndex, bool threatColor) {
     }
 
     // Check diagonals for bishop/queen
-	Bitboard enemyBishopBB = threatColor ? board.whiteBishops : board.blackBishops;
+    Bitboard enemyBishopBB = board.Bishops(threatColor);
     for (int rank = squareRank + 1, file = squareFile + 1; rank < 8 && file < 8; rank++, file++)
     {
         int index = rank * 8 + file;
@@ -145,7 +160,7 @@ static bool underThreat(const Board &board, int squareIndex, bool threatColor) {
         }
     }
 
-	Bitboard enemyKnightBB = threatColor ? board.whiteKnights : board.blackKnights;
+    Bitboard enemyKnightBB = board.Knights(threatColor);
     constexpr int knightMoves[8] = {6, 10, 15, 17, -6, -10, -15, -17};
     for (int moveOffset : knightMoves)
     {
@@ -166,9 +181,9 @@ static bool underThreat(const Board &board, int squareIndex, bool threatColor) {
 		}
     }
 
-	Bitboard enemyPawnBB = threatColor ? board.whitePawns : board.blackPawns;
+	Bitboard enemyPawnBB = board.Pawns(threatColor);
     int pawnCaptureOffsets[2] = {7, 9};
-    if (threatColor) 
+    if (threatColor == Color::White) 
     {
         pawnCaptureOffsets[0] *= -1;
         pawnCaptureOffsets[1] *= -1;
@@ -192,7 +207,7 @@ static bool underThreat(const Board &board, int squareIndex, bool threatColor) {
 		}
     }
 
-    Bitboard enemyKingBB = threatColor ? board.whiteKing : board.blackKing; 
+    Bitboard enemyKingBB = board.Kings(threatColor); 
     int kingAttackOffsets[8] = {7, 9, -7, -9, 8, -8, 1, -1};
     for (int offset : kingAttackOffsets)
     {
@@ -227,43 +242,45 @@ static void printMoveWithCount(int fromSquareIndex, int toSquareIndex, std::uint
 
 // TODO: make move arrays constexpr
 // TODO: change whiteTurn to color and don't hardcode 0/1 for black/white
-std::uint64_t perftest(const Board& board, int depth, bool whiteTurn) {
+// TODO: use Square instead of int or other integer types
+std::uint64_t perftest(const Board& board, int depth, Color colorToMove) {
     if (depth == 0) {
         return 1;
     }
     std::uint64_t countLeafNodes = 0;
-    const Bitboard occupancy = board.allPieces();
-    const Bitboard enemyOccupancy = whiteTurn ? board.blackPieces() : board.whitePieces();
-    const Bitboard friendlyOccupancy = whiteTurn ? board.whitePieces() : board.blackPieces();
-    std::span<const Bitboard, 6> enemyPieces = whiteTurn ? board.blackBitboards() : 
-                                                           board.whiteBitboards(); 
-    std::span<const Bitboard, 6> friendlyPieces = whiteTurn ? board.whiteBitboards():
-                                                              board.blackBitboards();
-    const int friendlyPieceOffset = whiteTurn ? WHITE_PIECE_OFFSET : BLACK_PIECE_OFFSET;
+    const Color opponentColor = ToggleColor(colorToMove);
+    const Bitboard occupancy = board.Occupancy();
+    const Bitboard enemyOccupancy = board.Occupancy(opponentColor);
+    const Bitboard friendlyOccupancy = board.Occupancy(colorToMove);
+    const Rank promotionRank = PROMOTION_RANK[colorToMove];
+    /*
     const int enemyPieceOffset = whiteTurn ? BLACK_PIECE_OFFSET : WHITE_PIECE_OFFSET;
-    const Bitboard pawns = friendlyPieces[PAWN_OFFSET];
-    const int pawnDirection = whiteTurn ? 8 : -8;
-    const int pawnStartRank = whiteTurn ? 1 : 6;
-    const int leftCaptureOffset = whiteTurn ? 7 : -9; 
-    const int rightCaptureOffset = whiteTurn ? 9 : -7;
-    const int kingsideRookSquareIndex = whiteTurn ? 7 : 63;
-    const int queensideRookSquareIndex = whiteTurn ? 0 : 56;
+    */
 
+    const Bitboard king = board.Kings(colorToMove);
     int originalKingSquareIndex = 0; 
     while (originalKingSquareIndex < 64)
     {
         Bitboard squareIndexBB = (Bitboard)1 << originalKingSquareIndex;
-        if (squareIndexBB & friendlyPieces[KING_OFFSET])
+        if (squareIndexBB & king)
         {
             break;
         }
         originalKingSquareIndex++;
     }
     
+    const Bitboard pawns = board.Pawns(colorToMove);
+    const int pawnDirection = colorToMove == White ? 8 : -8;
+    const int pawnStartRank = colorToMove == White ? 1 : 6;
+    const int leftCaptureOffset = colorToMove == White ? 7 : -9; 
+    const int rightCaptureOffset = colorToMove == White ? 9 : -7;
+    const int kingsideRookSquareIndex = colorToMove == White ? 7 : 63;
+    const int queensideRookSquareIndex = colorToMove == White ? 0 : 56;
     for (int squareIndex = 0; squareIndex < 64; squareIndex++) {
         Bitboard squareIndexBB = (Bitboard)1 << squareIndex;
         if (squareIndexBB & pawns)
         {
+            // TODO: avoid computing rank and file and find ways to use bitboard ops
             int rank = squareIndex / 8;
             int file = squareIndex % 8;
 
@@ -272,19 +289,15 @@ std::uint64_t perftest(const Board& board, int depth, bool whiteTurn) {
                 Bitboard oneSquareForwardBB = (Bitboard)1 << oneSquareForwardIndex;
                 if ((occupancy & oneSquareForwardBB) == 0) {
                     Board newBoard = board;
-                    newBoard.pieces[friendlyPieceOffset + PAWN_OFFSET] &= ~squareIndexBB;
-                    newBoard.pieces[friendlyPieceOffset + PAWN_OFFSET] |= oneSquareForwardBB;
+                    newBoard.Move(PieceType::Pawn, colorToMove, squareIndex, oneSquareForwardIndex);
                     newBoard.enPassant = 0;
-                    if (!underThreat(newBoard, originalKingSquareIndex, !whiteTurn)) {
-                        bool isPromotion = (whiteTurn && rank == 6) || (!whiteTurn && rank == 1);
-                        if (isPromotion) {
-                            constexpr int pawnPromotionPieceOffsets[4] = {QUEEN_OFFSET, ROOK_OFFSET, BISHOP_OFFSET, KNIGHT_OFFSET};
+                    if (!underThreat(newBoard, originalKingSquareIndex, opponentColor)) {
+                        if (rank == (int)promotionRank) {
                             for (int i = 0; i < 4; i++)
                             {
                                 Board promotionBoard = newBoard;
-                                promotionBoard.pieces[friendlyPieceOffset + PAWN_OFFSET] &= ~oneSquareForwardBB;
-                                promotionBoard.pieces[friendlyPieceOffset + pawnPromotionPieceOffsets[i]] |= oneSquareForwardBB;
-                                std::uint64_t movePerftCount = perftest(promotionBoard, depth - 1, !whiteTurn);
+                                promotionBoard.PromotePawn(promotionTypes[i], colorToMove);
+                                std::uint64_t movePerftCount = perftest(promotionBoard, depth - 1, opponentColor);
                                 #ifdef PRINT_DIAGNOSTICS
                                 if (depth == maxDepth) {
                                     printMoveWithCount(squareIndex, oneSquareForwardIndex, movePerftCount);
@@ -294,7 +307,7 @@ std::uint64_t perftest(const Board& board, int depth, bool whiteTurn) {
                             }
                         } 
                         else {
-                            std::uint64_t movePerftCount = perftest(newBoard, depth - 1, !whiteTurn);
+                            std::uint64_t movePerftCount = perftest(newBoard, depth - 1, opponentColor);
                             #ifdef PRINT_DIAGNOSTICS
                             if (depth == maxDepth) {
                                 printMoveWithCount(squareIndex, oneSquareForwardIndex, movePerftCount);
@@ -313,11 +326,10 @@ std::uint64_t perftest(const Board& board, int depth, bool whiteTurn) {
                             if ((occupancy & twoSquaresForwardBB) == 0)
                             {
                                 Board doublePushBoard = board;
-                                doublePushBoard.pieces[friendlyPieceOffset + PAWN_OFFSET] &= ~squareIndexBB;
-                                doublePushBoard.pieces[friendlyPieceOffset + PAWN_OFFSET] |= twoSquaresForwardBB;
+                                doublePushBoard.Move(PieceType::Pawn, colorToMove, squareIndex, twoSquaresForwardIndex);
                                 doublePushBoard.enPassant = twoSquaresForwardIndex;
-                                if (!underThreat(doublePushBoard, originalKingSquareIndex, !whiteTurn)) {
-                                    std::uint64_t movePerftCount = perftest(doublePushBoard, depth - 1, !whiteTurn);
+                                if (!underThreat(doublePushBoard, originalKingSquareIndex, opponentColor)) {
+                                    std::uint64_t movePerftCount = perftest(doublePushBoard, depth - 1, opponentColor);
                                     #ifdef PRINT_DIAGNOSTICS
                                     if (depth == maxDepth) {
                                         printMoveWithCount(squareIndex, twoSquaresForwardIndex, movePerftCount);
@@ -337,22 +349,18 @@ std::uint64_t perftest(const Board& board, int depth, bool whiteTurn) {
                     Bitboard leftDiagBB = (Bitboard)1 << leftDiagIndex;
                     if (enemyOccupancy & leftDiagBB) {
                         Board newBoard = board;
-                        newBoard.pieces[friendlyPieceOffset + PAWN_OFFSET] &= ~squareIndexBB;
-                        newBoard.pieces[friendlyPieceOffset + PAWN_OFFSET] |= leftDiagBB;
-                        removePiece(leftDiagIndex, newBoard, !whiteTurn);
+                        newBoard.Move(PieceType::Pawn, colorToMove, squareIndex, leftDiagIndex);
+                        removePiece(leftDiagIndex, newBoard, opponentColor);
                         newBoard.enPassant = 0;
-                        if (!underThreat(newBoard, originalKingSquareIndex, !whiteTurn)) {
-                            bool isPromotion = (whiteTurn && rank == 6) || (!whiteTurn && rank == 1);
-                            if (isPromotion) {
-                                constexpr int pawnPromotionPieceOffsets[4] = {QUEEN_OFFSET, ROOK_OFFSET, BISHOP_OFFSET, KNIGHT_OFFSET};
+                        if (!underThreat(newBoard, originalKingSquareIndex, opponentColor)) {
+                            if (rank == (int)promotionRank) {
                                 for (int i = 0; i < 4; i++)
                                 {
                                     Board promotionBoard = newBoard;
-                                    promotionBoard.pieces[friendlyPieceOffset + PAWN_OFFSET] &= ~leftDiagBB;
-                                    promotionBoard.pieces[friendlyPieceOffset + pawnPromotionPieceOffsets[i]] |= leftDiagBB;
-                                    std::uint64_t movePerftCount = perftest(promotionBoard, depth - 1, !whiteTurn);
+                                    promotionBoard.PromotePawn(promotionTypes[i], colorToMove);
+                                    std::uint64_t movePerftCount = perftest(promotionBoard, depth - 1, opponentColor);
                                     #ifdef PRINT_DIAGNOSTICS
-                                    if (depth == 1) incrementCaptures();
+                                    if (depth == 1) IncrementCaptures();
                                     if (depth == maxDepth) {
                                         printMoveWithCount(squareIndex, leftDiagIndex, movePerftCount);
                                     }
@@ -361,9 +369,9 @@ std::uint64_t perftest(const Board& board, int depth, bool whiteTurn) {
                                 }
                             }
                             else {
-                                std::uint64_t movePerftCount = perftest(newBoard, depth - 1, !whiteTurn);
+                                std::uint64_t movePerftCount = perftest(newBoard, depth - 1, opponentColor);
                                 #ifdef PRINT_DIAGNOSTICS
-                                if (depth == 1) incrementCaptures();
+                                if (depth == 1) IncrementCaptures();
                                 if (depth == maxDepth) {
                                     printMoveWithCount(squareIndex, leftDiagIndex, movePerftCount);
                                 }
@@ -377,15 +385,15 @@ std::uint64_t perftest(const Board& board, int depth, bool whiteTurn) {
                     int leftIndex = squareIndex - 1;
                     if (board.enPassant == leftIndex) {
                         Board newBoard = board;
-                        newBoard.pieces[friendlyPieceOffset + PAWN_OFFSET] &= ~squareIndexBB;
-                        newBoard.pieces[friendlyPieceOffset + PAWN_OFFSET] |= leftDiagBB;
-                        removePiece(leftIndex, newBoard, !whiteTurn);
+                        // TODO: refactor these move and remove calls to a single capture call
+                        newBoard.Move(PieceType::Pawn, colorToMove, squareIndex, leftDiagIndex);
+                        removePiece(leftIndex, newBoard, opponentColor);
                         newBoard.enPassant = 0; // reset en passant
-                        if (!underThreat(newBoard, originalKingSquareIndex, !whiteTurn)) {
-                            std::uint64_t movePerftCount = perftest(newBoard, depth - 1, !whiteTurn);
+                        if (!underThreat(newBoard, originalKingSquareIndex, opponentColor)) {
+                            std::uint64_t movePerftCount = perftest(newBoard, depth - 1, opponentColor);
                             #ifdef PRINT_DIAGNOSTICS
-                            if (depth == 1) incrementEnPassant();
-                            if (depth == 1) incrementCaptures();
+                            if (depth == 1) IncrementEnPassant();
+                            if (depth == 1) IncrementCaptures();
                             if (depth == maxDepth) {
                                 printMoveWithCount(squareIndex, leftDiagIndex, movePerftCount);
                             }
@@ -402,22 +410,18 @@ std::uint64_t perftest(const Board& board, int depth, bool whiteTurn) {
                     Bitboard rightDiagBB = (Bitboard)1 << rightDiagIndex;
                     if (enemyOccupancy & rightDiagBB) {
                         Board newBoard = board;
-                        newBoard.pieces[friendlyPieceOffset + PAWN_OFFSET] &= ~squareIndexBB;
-                        newBoard.pieces[friendlyPieceOffset + PAWN_OFFSET] |= rightDiagBB;
-                        removePiece(rightDiagIndex, newBoard, !whiteTurn);
+                        newBoard.Move(PieceType::Pawn, colorToMove, squareIndex, rightDiagIndex);
+                        removePiece(rightDiagIndex, newBoard, opponentColor);
                         newBoard.enPassant = 0;
-                        if (!underThreat(newBoard, originalKingSquareIndex, !whiteTurn)) {
-                            bool isPromotion = (whiteTurn && rank == 6) || (!whiteTurn && rank == 1);
-                            if (isPromotion) {
-                                constexpr int pawnPromotionPieceOffsets[4] = {QUEEN_OFFSET, ROOK_OFFSET, BISHOP_OFFSET, KNIGHT_OFFSET};
+                        if (!underThreat(newBoard, originalKingSquareIndex, opponentColor)) {
+                            if (rank == (int)promotionRank) {
                                 for (int i = 0; i < 4; i++)
                                 {
                                     Board promotionBoard = newBoard;
-                                    promotionBoard.pieces[friendlyPieceOffset + PAWN_OFFSET] &= ~rightDiagBB;
-                                    promotionBoard.pieces[friendlyPieceOffset + pawnPromotionPieceOffsets[i]] |= rightDiagBB;
-                                    std::uint64_t movePerftCount = perftest(promotionBoard, depth - 1, !whiteTurn);
+                                    promotionBoard.PromotePawn(promotionTypes[i], colorToMove);
+                                    std::uint64_t movePerftCount = perftest(promotionBoard, depth - 1, opponentColor);
                                     #ifdef PRINT_DIAGNOSTICS
-                                    if (depth == 1) incrementCaptures();
+                                    if (depth == 1) IncrementCaptures();
                                     if (depth == maxDepth) {
                                         printMoveWithCount(squareIndex, rightDiagIndex, movePerftCount);
                                     }
@@ -426,9 +430,9 @@ std::uint64_t perftest(const Board& board, int depth, bool whiteTurn) {
                                 }
                             } 
                             else {
-                                std::uint64_t movePerftCount = perftest(newBoard, depth - 1, !whiteTurn);
+                                std::uint64_t movePerftCount = perftest(newBoard, depth - 1, opponentColor);
                                 #ifdef PRINT_DIAGNOSTICS
-                                if (depth == 1) incrementCaptures();
+                                if (depth == 1) IncrementCaptures();
                                 if (depth == maxDepth) {
                                     printMoveWithCount(squareIndex, rightDiagIndex, movePerftCount);
                                 }
@@ -441,15 +445,14 @@ std::uint64_t perftest(const Board& board, int depth, bool whiteTurn) {
                     int rightIndex = squareIndex + 1;
                     if (board.enPassant == rightIndex) {
                         Board newBoard = board;
-                        newBoard.pieces[friendlyPieceOffset + PAWN_OFFSET] &= ~squareIndexBB;
-                        newBoard.pieces[friendlyPieceOffset + PAWN_OFFSET] |= rightDiagBB;
-                        removePiece(rightIndex, newBoard, !whiteTurn);
+                        newBoard.Move(PieceType::Pawn, colorToMove, squareIndex, rightDiagIndex);
+                        removePiece(rightIndex, newBoard, opponentColor);
                         newBoard.enPassant = 0; 
-                        if (!underThreat(newBoard, originalKingSquareIndex, !whiteTurn)) {
-                            std::uint64_t movePerftCount = perftest(newBoard, depth - 1, !whiteTurn);
+                        if (!underThreat(newBoard, originalKingSquareIndex, opponentColor)) {
+                            std::uint64_t movePerftCount = perftest(newBoard, depth - 1, opponentColor);
                             #ifdef PRINT_DIAGNOSTICS
-                            if (depth == 1) incrementEnPassant();
-                            if (depth == 1) incrementCaptures();
+                            if (depth == 1) IncrementEnPassant();
+                            if (depth == 1) IncrementCaptures();
                             if (depth == maxDepth) {
                                 printMoveWithCount(squareIndex, rightDiagIndex, movePerftCount);
                             }
@@ -462,7 +465,7 @@ std::uint64_t perftest(const Board& board, int depth, bool whiteTurn) {
         }
     }
 
-    const Bitboard knights = friendlyPieces[KNIGHT_OFFSET];
+    const Bitboard knights = board.Knights(colorToMove);
     constexpr int knightMoves[8] = {6, 10, 15, 17, -6, -10, -15, -17};
     for (int squareIndex = 0; squareIndex < 64; squareIndex++) {
         Bitboard squareIndexBB = (Bitboard)1 << squareIndex;
@@ -483,19 +486,18 @@ std::uint64_t perftest(const Board& board, int depth, bool whiteTurn) {
                 Bitboard newSquareBB = (Bitboard)1 << newSquareIndex;
                 if ((friendlyOccupancy & newSquareBB) == 0) { // Can't move to a square occupied by a friendly piece
                     Board newBoard = board;
-                    newBoard.pieces[friendlyPieceOffset + KNIGHT_OFFSET] &= ~squareIndexBB; // Remove knight from original square
-                    newBoard.pieces[friendlyPieceOffset + KNIGHT_OFFSET] |= newSquareBB;    // Place knight on new square
+                    newBoard.Move(PieceType::Knight, colorToMove, squareIndex, newSquareIndex);
                     bool isCapture = false;
                     if (enemyOccupancy & newSquareBB) { 
-                        removePiece(newSquareIndex, newBoard, !whiteTurn);
+                        removePiece(newSquareIndex, newBoard, opponentColor);
                         isCapture = true;
                     }
                     
                     newBoard.enPassant = 0; 
-                    if (!underThreat(newBoard, originalKingSquareIndex, !whiteTurn)) {
-                        std::uint64_t movePerftCount = perftest(newBoard, depth - 1, !whiteTurn);
+                    if (!underThreat(newBoard, originalKingSquareIndex, opponentColor)) {
+                        std::uint64_t movePerftCount = perftest(newBoard, depth - 1, opponentColor);
                         #ifdef PRINT_DIAGNOSTICS
-                        if (isCapture && depth == 1) incrementCaptures();
+                        if (isCapture && depth == 1) IncrementCaptures();
                         if (depth == maxDepth) {
                             printMoveWithCount(squareIndex, newSquareIndex, movePerftCount);
                         }
@@ -508,7 +510,7 @@ std::uint64_t perftest(const Board& board, int depth, bool whiteTurn) {
     }
 
     struct SlidingPiece {
-        int pieceIndex;
+        PieceType type;
         const int* moves;
         int numMoves;
     };
@@ -518,13 +520,14 @@ std::uint64_t perftest(const Board& board, int depth, bool whiteTurn) {
     int queenMoves[8] = {7, 9, -7, -9, 8, -8, 1, -1}; // Diagonal first
 
     SlidingPiece slidingPieces[] = {
-        {BISHOP_OFFSET, bishopMoves, 4},
-        {ROOK_OFFSET, rookMoves, 4},
-        {QUEEN_OFFSET, queenMoves, 8}
+        {PieceType::Bishop, bishopMoves, 4},
+        {PieceType::Rook, rookMoves, 4},
+        {PieceType::Queen, queenMoves, 8}
     };
-
+    
+    const auto friendlyBitboards = board.Bitboards(colorToMove);
     for (const SlidingPiece& pieceInfo : slidingPieces) {
-        const Bitboard pieceBoard = friendlyPieces[pieceInfo.pieceIndex];
+        const Bitboard pieceBoard = board.bitboards2D[colorToMove][(int)pieceInfo.type];
         for (int squareIndex = 0; squareIndex < 64; squareIndex++) {
             Bitboard squareIndexBB = (Bitboard)1 << squareIndex;
             if (squareIndexBB & pieceBoard) {
@@ -533,7 +536,7 @@ std::uint64_t perftest(const Board& board, int depth, bool whiteTurn) {
                     int newSquareIndex = squareIndex;
                     int prevFile = squareIndex % 8;
                     int prevRank = squareIndex / 8;
-                    bool diagonalMove = pieceInfo.pieceIndex == BISHOP_OFFSET || (pieceInfo.pieceIndex == QUEEN_OFFSET && i < 4);
+                    bool diagonalMove = pieceInfo.type == PieceType::Bishop || (pieceInfo.type == PieceType::Queen && i < 4);
                     while (true) {
                         newSquareIndex += moveOffset;
                         if (newSquareIndex < 0 || newSquareIndex >= 64) break;
@@ -556,33 +559,32 @@ std::uint64_t perftest(const Board& board, int depth, bool whiteTurn) {
                         if (friendlyOccupancy & newSquareBB) break; // Blocked by friendly piece
 
                         Board newBoard = board;
-                        newBoard.pieces[friendlyPieceOffset + pieceInfo.pieceIndex] &= ~squareIndexBB; 
-                        newBoard.pieces[friendlyPieceOffset + pieceInfo.pieceIndex] |= newSquareBB;
+                        newBoard.Move(pieceInfo.type, colorToMove, squareIndex, newSquareIndex);
                         // TODO: these two blocks can be combined with a break if it's a capture
                         if (enemyOccupancy & newSquareBB) {
-                            removePiece(newSquareIndex, newBoard, !whiteTurn);
+                            removePiece(newSquareIndex, newBoard, opponentColor);
                             
                             newBoard.enPassant = 0; 
                             
-                            if (!underThreat(newBoard, originalKingSquareIndex, !whiteTurn)) {
-                                if (pieceInfo.pieceIndex == ROOK_OFFSET) {
+                            if (!underThreat(newBoard, originalKingSquareIndex, opponentColor)) {
+                                if (pieceInfo.type == PieceType::Rook) {
                                     if (squareIndex == kingsideRookSquareIndex) {
-                                        if (whiteTurn) {
+                                        if (colorToMove == Color::White) {
                                             newBoard.whiteKingsideCastlingRight = false;
                                         } else {
                                             newBoard.blackKingsideCastlingRight = false;
                                         }
                                     } else if (squareIndex == queensideRookSquareIndex) {
-                                        if (whiteTurn) {
+                                        if (colorToMove == Color::White) {
                                             newBoard.whiteQueensideCastlingRight = false;
                                         } else {
                                             newBoard.blackQueensideCastlingRight = false;
                                         }
                                     }
                                 }
-                                std::uint64_t movePerftCount = perftest(newBoard, depth - 1, !whiteTurn);
+                                std::uint64_t movePerftCount = perftest(newBoard, depth - 1, opponentColor);
                                 #ifdef PRINT_DIAGNOSTICS
-                                if (depth == 1) incrementCaptures();
+                                if (depth == 1) IncrementCaptures();
                                 if (depth == maxDepth) {
                                     printMoveWithCount(squareIndex, newSquareIndex, movePerftCount);
                                 }
@@ -592,23 +594,23 @@ std::uint64_t perftest(const Board& board, int depth, bool whiteTurn) {
                             break; // Stop sliding after capturing an enemy piece
                         } else {
                             newBoard.enPassant = 0;
-                            if (!underThreat(newBoard, originalKingSquareIndex, !whiteTurn)) {
-                                if (pieceInfo.pieceIndex == ROOK_OFFSET) {
+                            if (!underThreat(newBoard, originalKingSquareIndex, opponentColor)) {
+                                if (pieceInfo.type == PieceType::Rook) {
                                     if (squareIndex == kingsideRookSquareIndex) {
-                                        if (whiteTurn) {
+                                        if (colorToMove == Color::White) {
                                             newBoard.whiteKingsideCastlingRight = false;
                                         } else {
                                             newBoard.blackKingsideCastlingRight = false;
                                         }
                                     } else if (squareIndex == queensideRookSquareIndex) {
-                                        if (whiteTurn) {
+                                        if (colorToMove == Color::White) {
                                             newBoard.whiteQueensideCastlingRight = false;
                                         } else {
                                             newBoard.blackQueensideCastlingRight = false;
                                         }
                                     }
                                 }
-                                std::uint64_t movePerftCount = perftest(newBoard, depth - 1, !whiteTurn);
+                                std::uint64_t movePerftCount = perftest(newBoard, depth - 1, opponentColor);
                                 #ifdef PRINT_DIAGNOSTICS
                                 if (depth == maxDepth) {
                                     printMoveWithCount(squareIndex, newSquareIndex, movePerftCount);
@@ -623,7 +625,6 @@ std::uint64_t perftest(const Board& board, int depth, bool whiteTurn) {
         }
     }
 
-    const Bitboard king = friendlyPieces[KING_OFFSET];
     int kingMoves[8] = {7, 9, -7, -9, 8, -8, 1, -1};
     for (int squareIndex = 0; squareIndex < 64; squareIndex++)
     {
@@ -649,28 +650,21 @@ std::uint64_t perftest(const Board& board, int depth, bool whiteTurn) {
                 if ((friendlyOccupancy & newSquareBB) == 0)
                 { // Can't move to a square occupied by a friendly piece
                     Board newBoard = board;
-                    newBoard.pieces[friendlyPieceOffset + KING_OFFSET] &= ~squareIndexBB; // Remove king from original square
-                    newBoard.pieces[friendlyPieceOffset + KING_OFFSET] |= newSquareBB;    // Place king on new square
+                    newBoard.Move(PieceType::King, colorToMove, squareIndex, newSquareIndex);
 
                     bool isCapture = false;
                     if (enemyOccupancy & newSquareBB) {
-                        removePiece(newSquareIndex, newBoard, !whiteTurn);
+                        removePiece(newSquareIndex, newBoard, opponentColor);
                         isCapture = true;
                     }
-                    if (!underThreat(newBoard, newSquareIndex, !whiteTurn)) {
-                        if (whiteTurn) {
-                            newBoard.whiteKingsideCastlingRight = false;
-                            newBoard.whiteQueensideCastlingRight = false;
-                        } else {
-                            newBoard.blackKingsideCastlingRight = false;
-                            newBoard.blackQueensideCastlingRight = false;
-                        }
+                    if (!underThreat(newBoard, newSquareIndex, opponentColor)) {
+                        newBoard.RemoveCastlingRights(colorToMove);
                         // TODO: find a better way to handle resetting en passant. This is error 
                         // prone because it has to be done every recursive call
                         newBoard.enPassant = 0;
-                        std::uint64_t movePerftCount = perftest(newBoard, depth - 1, !whiteTurn);
+                        std::uint64_t movePerftCount = perftest(newBoard, depth - 1, opponentColor);
                         #ifdef PRINT_DIAGNOSTICS
-                        if (depth == 1 && isCapture) incrementCaptures();
+                        if (depth == 1 && isCapture) IncrementCaptures();
                         if (depth == maxDepth) {
                             printMoveWithCount(squareIndex, newSquareIndex, movePerftCount);
                         }
@@ -680,35 +674,24 @@ std::uint64_t perftest(const Board& board, int depth, bool whiteTurn) {
                 }
             }
 
-            bool kingsideCastlingRight = whiteTurn ? board.whiteKingsideCastlingRight : board.blackKingsideCastlingRight;
-            bool queensideCastlingRight = whiteTurn ? board.whiteQueensideCastlingRight : board.blackQueensideCastlingRight;
-            if (kingsideCastlingRight) {
+            if (board.KingsideCastlingRight(colorToMove)) {
                 bool squaresVacant = (occupancy & ((Bitboard)1 << (squareIndex + 1))) == 0 &&
                                      (occupancy & ((Bitboard)1 << (squareIndex + 2))) == 0;
                 if (squaresVacant) {
-                    bool enemyPrevents = underThreat(board, originalKingSquareIndex, !whiteTurn)     ||
-                                         underThreat(board, originalKingSquareIndex + 1, !whiteTurn) ||
-                                         underThreat(board, originalKingSquareIndex + 2, !whiteTurn);
+                    bool enemyPrevents = underThreat(board, originalKingSquareIndex, opponentColor)     ||
+                                         underThreat(board, originalKingSquareIndex + 1, opponentColor) ||
+                                         underThreat(board, originalKingSquareIndex + 2, opponentColor);
                     if (!enemyPrevents) {
                         Board newBoard = board;
                         int newSquareIndex = squareIndex + 2;
-                        Bitboard kingsideRookBB = (Bitboard)1 << kingsideRookSquareIndex;
-                        newBoard.pieces[friendlyPieceOffset + KING_OFFSET] &= ~squareIndexBB; // Remove king from original square
-                        newBoard.pieces[friendlyPieceOffset + KING_OFFSET] |= (Bitboard)1 << (squareIndex + 2); // Place king on new square
-                        newBoard.pieces[friendlyPieceOffset + ROOK_OFFSET] &= ~kingsideRookBB; // Remove rook from original square
-                        newBoard.pieces[friendlyPieceOffset + ROOK_OFFSET] |= (Bitboard)1 << (squareIndex + 1); // Place rook on new square
-                        if (whiteTurn) {
-                            newBoard.whiteKingsideCastlingRight = false;
-                            newBoard.whiteQueensideCastlingRight = false;
-                        } else {
-                            newBoard.blackKingsideCastlingRight = false;
-                            newBoard.blackQueensideCastlingRight = false;
-                        }
+                        newBoard.Move(PieceType::King, colorToMove, squareIndex, squareIndex + 2);
+                        newBoard.Move(PieceType::Rook, colorToMove, kingsideRookSquareIndex, squareIndex + 1);
+                        newBoard.RemoveCastlingRights(colorToMove);
                         // no need to check for threat, already checked above
                         newBoard.enPassant = 0;
-                        std::uint64_t movePerftCount = perftest(newBoard, depth - 1, !whiteTurn);
+                        std::uint64_t movePerftCount = perftest(newBoard, depth - 1, opponentColor);
                         #ifdef PRINT_DIAGNOSTICS
-                        if (depth == 1) incrementCastles();
+                        if (depth == 1) IncrementCastles();
                         if (depth == maxDepth) {
                             printMoveWithCount(squareIndex, newSquareIndex, movePerftCount);
                         }
@@ -717,34 +700,26 @@ std::uint64_t perftest(const Board& board, int depth, bool whiteTurn) {
                     }
                 }
             }
-            if (queensideCastlingRight) {
+            if (board.QueensideCastlingRight(colorToMove)) {
                 bool squaresVacant = (occupancy & ((Bitboard)1 << (squareIndex - 1))) == 0 &&
                                      (occupancy & ((Bitboard)1 << (squareIndex - 2))) == 0 &&
                                      (occupancy & ((Bitboard)1 << (squareIndex - 3))) == 0;
                 if (squaresVacant) {
-                    bool enemyPrevents = underThreat(board, originalKingSquareIndex, !whiteTurn)     ||
-                                         underThreat(board, originalKingSquareIndex - 1, !whiteTurn) ||
-                                         underThreat(board, originalKingSquareIndex - 2, !whiteTurn);
+                    bool enemyPrevents = underThreat(board, originalKingSquareIndex, opponentColor)     ||
+                                         underThreat(board, originalKingSquareIndex - 1, opponentColor) ||
+                                         underThreat(board, originalKingSquareIndex - 2, opponentColor);
                     if (!enemyPrevents) {
                         Board newBoard = board;
                         int newSquareIndex = squareIndex - 2;
                         Bitboard queensideRookBB = (Bitboard)1 << queensideRookSquareIndex;
-                        newBoard.pieces[friendlyPieceOffset + KING_OFFSET] &= ~squareIndexBB; // Remove king from original square
-                        newBoard.pieces[friendlyPieceOffset + KING_OFFSET] |= (Bitboard)1 << (squareIndex - 2); // Place king on new square
-                        newBoard.pieces[friendlyPieceOffset + ROOK_OFFSET] &= ~queensideRookBB; // Remove rook from original square
-                        newBoard.pieces[friendlyPieceOffset + ROOK_OFFSET] |= (Bitboard)1 << (squareIndex - 1); // Place rook on new square
+                        newBoard.Move(PieceType::King, colorToMove, squareIndex, squareIndex - 2);
+                        newBoard.Move(PieceType::Rook, colorToMove, queensideRookSquareIndex, squareIndex - 1);
                         // no need to check for threat, already checked above
-                        if (whiteTurn) {
-                            newBoard.whiteKingsideCastlingRight = false;
-                            newBoard.whiteQueensideCastlingRight = false;
-                        } else {
-                            newBoard.blackKingsideCastlingRight = false;
-                            newBoard.blackQueensideCastlingRight = false;
-                        }
+                        newBoard.RemoveCastlingRights(colorToMove);
                         newBoard.enPassant = 0;
-                        std::uint64_t movePerftCount = perftest(newBoard, depth - 1, !whiteTurn);
+                        std::uint64_t movePerftCount = perftest(newBoard, depth - 1, opponentColor);
                         #ifdef PRINT_DIAGNOSTICS
-                        if (depth == 1) incrementCastles();
+                        if (depth == 1) IncrementCastles();
                         if (depth == maxDepth) {
                             printMoveWithCount(squareIndex, newSquareIndex, movePerftCount);
                         }

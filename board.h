@@ -1,7 +1,13 @@
 #pragma once
 
+#include <cassert>
 #include <cstdint>
 #include <span>
+
+
+enum class Rank : std::uint8_t {
+    First, Second, Third, Fourth, Fifth, Sixth, Seventh, Eighth
+};
 
 using Bitboard = std::uint64_t;
 static constexpr Bitboard WP_START = 0xFF00ULL;
@@ -24,16 +30,35 @@ static constexpr int QUEEN_OFFSET = 4;
 static constexpr int KING_OFFSET = 5;
 static constexpr int WHITE_PIECE_OFFSET = 0;
 static constexpr int BLACK_PIECE_OFFSET = 6;
-
+static constexpr int COLOR_OFFSET[2] = { 0, 6 }; // Matches order of Color enum
 static constexpr int COUNT_BITBOARDS = 12;
+static constexpr Rank PROMOTION_RANK[2] = { Rank::Seventh, Rank::Second };
+
+static constexpr Bitboard PROMOTION_RANK_MASK[2] = { (Bitboard)0xFF << 48, (Bitboard)0xFF << 8 };
+
+using Square = std::uint8_t;
+
+static constexpr Bitboard ToBitboard(Square s) {
+    return (Bitboard)1 << s;
+}
 
 enum class PieceType {
     Pawn, Knight, Bishop, Rook, Queen, King, None
 };
 
+constexpr PieceType promotionTypes[4] = {PieceType::Queen, PieceType::Rook, PieceType::Bishop, PieceType::Knight};
+
+enum Color {
+    White, Black
+};
+
+inline Color ToggleColor(Color color) {
+    return Color(1 - color);
+}
+
 struct Piece {
     PieceType type;
-    bool color; // 0-black 1-white
+    Color color; 
 };
 
 struct Board {
@@ -52,7 +77,10 @@ struct Board {
             Bitboard blackQueens;
             Bitboard blackKing;
         };
-        Bitboard pieces[COUNT_BITBOARDS];
+        struct {
+            Bitboard bitboards2D[2][6];
+        };
+        Bitboard bitboards[COUNT_BITBOARDS];
     };
 
     std::uint8_t enPassant;
@@ -63,18 +91,37 @@ struct Board {
     bool blackKingsideCastlingRight = true;
     bool blackQueensideCastlingRight = true;
 
-    std::uint64_t whitePieces() const {
+    bool KingsideCastlingRight(Color color) const { return color == Color::White ? whiteKingsideCastlingRight : blackKingsideCastlingRight; }
+    bool QueensideCastlingRight(Color color) const { return color == Color::White ? whiteQueensideCastlingRight : blackQueensideCastlingRight; }
+    void RemoveCastlingRights(Color color) {
+        if (color == Color::White) {
+            whiteKingsideCastlingRight = whiteQueensideCastlingRight = false;
+        }
+        else {
+            blackKingsideCastlingRight = blackQueensideCastlingRight = false;
+        }
+    }
+
+    Bitboard WhiteOccupancy() const {
         return whitePawns | whiteKnights | whiteBishops | whiteRooks | whiteQueens | whiteKing;
     }
 
-    std::uint64_t blackPieces() const {
+    Bitboard BlackOccupancy() const {
         return blackPawns | blackKnights | blackBishops | blackRooks | blackQueens | blackKing;
     }
 
-    bool valid() const {
+    Bitboard Occupancy(Color color) const {
+        return color == Color::White ? WhiteOccupancy() : BlackOccupancy(); 
+    }
+
+    Bitboard Occupancy() const { return WhiteOccupancy() | BlackOccupancy(); }
+
+    Bitboard EmptySquares() const { return ~Occupancy(); }
+
+    bool Valid() const {
         for (int i = 0; i < COUNT_BITBOARDS; i++) {
             for (int j = i + 1; j < COUNT_BITBOARDS; j++) {
-                if ((pieces[i] & pieces[j]) != 0) {
+                if ((bitboards[i] & bitboards[j]) != 0) {
                     return false;
                 }
             }
@@ -82,14 +129,35 @@ struct Board {
         return true;
     }
 
-    std::uint64_t allPieces() const { return whitePieces() | blackPieces(); }
+    std::span<const Bitboard, 6> WhiteBitboards() const { return std::span<const Bitboard, 6>{&bitboards[WHITE_PIECE_OFFSET], 6}; }
+    std::span<const Bitboard, 6> BlackBitboards() const { return std::span<const Bitboard, 6>{&bitboards[BLACK_PIECE_OFFSET], 6}; }
+    std::span<const Bitboard, 6> Bitboards(Color color) const { return color == Color::Black ? BlackBitboards() : WhiteBitboards(); }
 
-    std::uint64_t emptySquares() const { return ~allPieces(); }
+    std::span<Bitboard, 6> WhiteBitboards() { return std::span<Bitboard, 6>{&bitboards[WHITE_PIECE_OFFSET], 6}; }
+    std::span<Bitboard, 6> BlackBitboards() { return std::span<Bitboard, 6>{&bitboards[BLACK_PIECE_OFFSET], 6}; }
+    std::span<Bitboard, 6> Bitboards(Color color) { return color == Color::Black ? BlackBitboards() : WhiteBitboards(); }
 
-    std::span<const Bitboard, 6> whiteBitboards() const { return std::span<const Bitboard, 6>{&pieces[WHITE_PIECE_OFFSET], 6}; }
-    std::span<const Bitboard, 6> blackBitboards() const { return std::span<const Bitboard, 6>{&pieces[BLACK_PIECE_OFFSET], 6}; }
-    std::span<Bitboard, 6> whiteBitboards() { return std::span<Bitboard, 6>{&pieces[WHITE_PIECE_OFFSET], 6}; }
-    std::span<Bitboard, 6> blackBitboards() { return std::span<Bitboard, 6>{&pieces[BLACK_PIECE_OFFSET], 6}; }
+    Bitboard Pawns(Color c) const { return bitboards[PAWN_OFFSET + COLOR_OFFSET[c]]; }
+    Bitboard Knights(Color c) const { return bitboards[KNIGHT_OFFSET + COLOR_OFFSET[c]]; }
+    Bitboard Bishops(Color c) const { return bitboards[BISHOP_OFFSET + COLOR_OFFSET[c]]; }
+    Bitboard Rooks(Color c) const { return bitboards[ROOK_OFFSET + COLOR_OFFSET[c]]; }
+    Bitboard Queens(Color c) const { return bitboards[QUEEN_OFFSET + COLOR_OFFSET[c]]; }
+    Bitboard Kings(Color c) const { return bitboards[KING_OFFSET + COLOR_OFFSET[c]]; }
+
+    void Move(PieceType type, Color c, Square from, Square to) {
+        bitboards[(int)type + COLOR_OFFSET[c]] &= ~ToBitboard(from);
+        bitboards[(int)type + COLOR_OFFSET[c]] |= ToBitboard(to);
+    }
+
+    void PromotePawn(PieceType promotionType, Color c) {
+        Bitboard pawns = Pawns(c);
+        Bitboard promotionRankMask = PROMOTION_RANK_MASK[(int)c];
+        Bitboard promotionRankBB = pawns & promotionRankMask;
+        assert(promotionRankBB != 0);
+        bitboards[(int)promotionType + COLOR_OFFSET[c]] |= promotionRankBB;
+        pawns &= ~promotionRankMask;
+        bitboards[PAWN_OFFSET + COLOR_OFFSET[c]] = pawns;
+    }
 
     bool operator==(const Board& other) const {
         return whitePawns == other.whitePawns &&

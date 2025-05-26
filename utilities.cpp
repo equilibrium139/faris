@@ -1,6 +1,7 @@
 #include "utilities.h"
+#include <iostream>
 
-void prettyPrint(Bitboard bb) {
+void PrettyPrint(Bitboard bb) {
     for (int rank = 7; rank >= 0; rank--) {
         for (int file = 0; file < 8; file++) {
             Bitboard squareBB = (Bitboard)1 << (rank * 8 + file);
@@ -12,7 +13,7 @@ void prettyPrint(Bitboard bb) {
     std::cout << "\n\n";
 }
 
-void prettyPrint(const Board& board) {
+void PrettyPrint(const Board& board) {
     for (int rank = 7; rank >= 0; rank--) {
         for (int file = 0; file < 8; file++) {
             Bitboard squareBB = (Bitboard)1 << (rank * 8 + file);
@@ -35,13 +36,11 @@ void prettyPrint(const Board& board) {
     std::cout << "\n\n";
 }
 
-Piece pieceAt(int squareIndex, const Board &board) {
+Piece PieceAt(int squareIndex, const Board &board) {
     Bitboard squareIndexBB = (Bitboard)1 << squareIndex;
-    for (int i = 0; i < COUNT_BITBOARDS; i++)
-    {
-        if (squareIndexBB & board.pieces[i])
-        {
-            return i < 6 ? Piece{PieceType(i), true} : Piece{PieceType(i - 6), false};
+    for (int i = 0; i < COUNT_BITBOARDS; i++) {
+        if (squareIndexBB & board.bitboards[i]) {
+            return i < 6 ? Piece{PieceType(i), Color::White} : Piece{PieceType(i - 6), Color::Black};
         }
     }
     return {PieceType::None};

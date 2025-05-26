@@ -1,7 +1,5 @@
-#include <iostream>
-
 #include "board.h"
 
-void prettyPrint(Bitboard bb);
-void prettyPrint(const Board& board);
-Piece pieceAt(int squareIndex, const Board &board);
+void PrettyPrint(Bitboard bb);
+void PrettyPrint(const Board& board);
+Piece PieceAt(int squareIndex, const Board &board);

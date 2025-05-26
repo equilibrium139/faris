@@ -1,7 +1,9 @@
 #include "fen.h"
+#include "board.h"
 #include "utilities.h"
+#include <stdexcept>
 
-Fen parseFEN(const std::string& fenStr) {
+Fen ParseFen(const std::string& fenStr) {
     Fen fen;
     fen.board = Board{false};
     Board& board = fen.board;
@@ -88,9 +90,9 @@ Fen parseFEN(const std::string& fenStr) {
     }
 
     if (fenStr[fenIdx] == 'w') {
-        fen.whiteTurn = true;
+        fen.colorToMove = Color::White;
     } else if (fenStr[fenIdx] == 'b') {
-        fen.whiteTurn = false;
+        fen.colorToMove = Color::Black;
     } else {
         throw std::invalid_argument("Invalid FEN format");
     }
@@ -141,7 +143,7 @@ Fen parseFEN(const std::string& fenStr) {
         int rank = fenStr[fenIdx + 1] - '1';
         // My convention is to use the destination square for en passant, not the potential capture square as FEN notation does. This converts
         // the FEN notation to my convention. example: 1. e4 sets en passant square to e4, not e3 like fen.
-        if (fen.whiteTurn) {
+        if (fen.colorToMove == Color::White) {
             rank--;
         } else {
             rank++;
@@ -177,13 +179,13 @@ Fen parseFEN(const std::string& fenStr) {
     return fen;
 }
 
-std::string toFen(const Fen& fen) {
+std::string ToFen(const Fen& fen) {
     std::string fenStr;
     char nextChar = '0';
     for (int rank = 7; rank >= 0; rank--) {
         for (int file = 0; file < 8; file++) {
             int squareIndex = rank * 8 + file;
-            Piece piece = pieceAt(squareIndex, fen.board);
+            Piece piece = PieceAt(squareIndex, fen.board);
             if (piece.type == PieceType::None) {
                 if (!fenStr.empty() && std::isdigit(fenStr.back())) {
                     fenStr.back()++;
@@ -193,22 +195,22 @@ std::string toFen(const Fen& fen) {
             } else {
                 switch (piece.type) {
                     case PieceType::Pawn:
-                        fenStr += piece.color ? 'P' : 'p';
+                        fenStr += piece.color == White ? 'P' : 'p';
                         break;
                     case PieceType::Knight:
-                        fenStr += piece.color ? 'N' : 'n';
+                        fenStr += piece.color == White ? 'N' : 'n';
                         break;
                     case PieceType::Bishop:
-                        fenStr += piece.color ? 'B' : 'b';
+                        fenStr += piece.color == White ? 'B' : 'b';
                         break;
                     case PieceType::Rook:
-                        fenStr += piece.color ? 'R' : 'r';
+                        fenStr += piece.color == White ? 'R' : 'r';
                         break;
                     case PieceType::Queen:
-                        fenStr += piece.color ? 'Q' : 'q';
+                        fenStr += piece.color == White ? 'Q' : 'q';
                         break;
                     case PieceType::King:   
-                        fenStr += piece.color ? 'K' : 'k';
+                        fenStr += piece.color == White ? 'K' : 'k';
                         break;
                     default:
                         throw std::invalid_argument("Invalid piece type");
@@ -220,7 +222,7 @@ std::string toFen(const Fen& fen) {
 
     fenStr.pop_back(); // Remove the last '/'
     fenStr += ' ';
-    fenStr += fen.whiteTurn ? 'w' : 'b';
+    fenStr += fen.colorToMove == Color::White ? 'w' : 'b';
     fenStr += ' ';
     if (fen.board.whiteKingsideCastlingRight) {
         fenStr += 'K';
@@ -243,7 +245,7 @@ std::string toFen(const Fen& fen) {
     } else {
         int file = fen.board.enPassant % 8;
         int rank = fen.board.enPassant / 8;
-        if (fen.whiteTurn) {
+        if (fen.colorToMove == Color::White) {
             rank++;
         } else {
             rank--;

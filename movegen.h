@@ -2,14 +2,13 @@
 
 #include "board.h"
 #include <span>
-#include <vector>
 #include <cstdint>
 
 extern int maxDepth;
-std::uint64_t perftest(const Board& board, int depth, bool whiteTurn);
-void removePiece(int squareIndex, std::span<Bitboard, 6> pieces);
-void removePiece(int squareIndex, Board &board, bool white);
+std::uint64_t perftest(const Board& board, int depth, Color colorToMove);
+void removePiece(int squareIndex, std::span<Bitboard, 6> pieceBB);
+void removePiece(int squareIndex, Board &board, Color colorToRemove);
 
-int incrementCastles();
-int incrementCaptures();
-int incrementEnPassant();
+int IncrementCastles();
+int IncrementCaptures();
+int IncrementEnPassant();
