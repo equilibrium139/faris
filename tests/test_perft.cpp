@@ -1,17 +1,20 @@
 #include "gtest/gtest.h"
-#include "board.h"
+#include "movegen.h"
 #include "perft_test_case.h"
 
-int maxDepth = 3;
+// TODO: handle maxDepth in a better way
+int maxDepth;
 
 class PerftTestFixture : public ::testing::TestWithParam<PerftTest> {
-    protected:
-        Board board;
 };
 
 TEST_P(PerftTestFixture, VerifyNodeCounts) {
     const PerftTest& testCase = GetParam();
-    ASSERT_TRUE(testCase.fen.board.Valid());
+    for (const PerftTest::Result& result : testCase.nodeCounts) {
+        maxDepth = result.depth;
+        std::uint64_t nodeCount = perftest(testCase.fen.board, result.depth, testCase.fen.colorToMove);
+        ASSERT_EQ(result.nodeCount, nodeCount);
+    }
 }
 
 INSTANTIATE_TEST_SUITE_P(PerftTestsFromFile, PerftTestFixture, ::testing::ValuesIn(LoadPerftTests("perft_test_data.txt")));
