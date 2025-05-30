@@ -8,7 +8,7 @@
 int maxDepth;
 
 int main(int argc, char** argv) {
-    maxDepth = 3;
+    maxDepth = 5;
     if (argc > 1) {
         maxDepth = std::atoi(argv[1]);
     }

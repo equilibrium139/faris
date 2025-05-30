@@ -252,7 +252,7 @@ std::uint64_t perftest(const Board& board, int depth, Color colorToMove) {
     const Bitboard occupancy = board.Occupancy();
     const Bitboard enemyOccupancy = board.Occupancy(opponentColor);
     const Bitboard friendlyOccupancy = board.Occupancy(colorToMove);
-    const Rank promotionRank = PROMOTION_RANK[colorToMove];
+    const Bitboard promotionRankMask = PROMOTION_RANK_MASK[colorToMove];
     /*
     const int enemyPieceOffset = whiteTurn ? BLACK_PIECE_OFFSET : WHITE_PIECE_OFFSET;
     */
@@ -292,7 +292,7 @@ std::uint64_t perftest(const Board& board, int depth, Color colorToMove) {
                     newBoard.Move(PieceType::Pawn, colorToMove, squareIndex, oneSquareForwardIndex);
                     newBoard.enPassant = 0;
                     if (!underThreat(newBoard, originalKingSquareIndex, opponentColor)) {
-                        if (rank == (int)promotionRank) {
+                        if (newBoard.Pawns(colorToMove) & promotionRankMask) {
                             for (int i = 0; i < 4; i++)
                             {
                                 Board promotionBoard = newBoard;
@@ -353,7 +353,7 @@ std::uint64_t perftest(const Board& board, int depth, Color colorToMove) {
                         removePiece(leftDiagIndex, newBoard, opponentColor);
                         newBoard.enPassant = 0;
                         if (!underThreat(newBoard, originalKingSquareIndex, opponentColor)) {
-                            if (rank == (int)promotionRank) {
+                            if (newBoard.Pawns(colorToMove) & promotionRankMask) {
                                 for (int i = 0; i < 4; i++)
                                 {
                                     Board promotionBoard = newBoard;
@@ -414,7 +414,7 @@ std::uint64_t perftest(const Board& board, int depth, Color colorToMove) {
                         removePiece(rightDiagIndex, newBoard, opponentColor);
                         newBoard.enPassant = 0;
                         if (!underThreat(newBoard, originalKingSquareIndex, opponentColor)) {
-                            if (rank == (int)promotionRank) {
+                            if (newBoard.Pawns(colorToMove) & promotionRankMask) {
                                 for (int i = 0; i < 4; i++)
                                 {
                                     Board promotionBoard = newBoard;

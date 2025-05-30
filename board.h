@@ -32,9 +32,8 @@ static constexpr int WHITE_PIECE_OFFSET = 0;
 static constexpr int BLACK_PIECE_OFFSET = 6;
 static constexpr int COLOR_OFFSET[2] = { 0, 6 }; // Matches order of Color enum
 static constexpr int COUNT_BITBOARDS = 12;
-static constexpr Rank PROMOTION_RANK[2] = { Rank::Seventh, Rank::Second };
 
-static constexpr Bitboard PROMOTION_RANK_MASK[2] = { (Bitboard)0xFF << 48, (Bitboard)0xFF << 8 };
+static constexpr Bitboard PROMOTION_RANK_MASK[2] = { (Bitboard)0xFF << 56, (Bitboard)0xFF };
 
 using Square = std::uint8_t;
 
