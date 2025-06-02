@@ -1,6 +1,7 @@
 #include "gtest/gtest.h"
 #include "movegen.h"
 #include "perft_test_case.h"
+#include "stockfish_divide.h"
 #include <iostream>
 
 // TODO: handle maxDepth in a better way
@@ -17,15 +18,27 @@ TEST_P(PerftTestFixture, VerifyNodeCounts) {
         maxDepth = result.depth;
         std::uint64_t nodeCount = perftest(testCase.fen.board, result.depth, testCase.fen.colorToMove);
         if (result.nodeCount != nodeCount) {
+
+            // const std::vector<std::string>& farisPerftDivide = perftDivide;
+
+            /* for (const std::string& s : farisPerftDivide) {
+                std::cerr << s << std::endl;
+            }
+            */
+            
+
             std::cerr << "\n-------- DIAGNOSTICS for FAILED Perft --------\n"
                       << "FEN: " << fenString << "\n"
                       << "Depth: " << result.depth
                       << ", Expected: " << result.nodeCount
                       << ", Got: " << nodeCount << "\n"
-                      << "Divide output:" << std::endl; 
+                      << "Faris divide output:" << std::endl; 
             enablePerftDiagnostics = true;
             perftest(testCase.fen.board, result.depth, testCase.fen.colorToMove);
             enablePerftDiagnostics = false;
+            std::string stockfishPerftDivide = ComputeStockfishPerftDivide(fenString, result.depth); 
+            std::cerr << "Stockfish divide output:" << std::endl;
+            std::cerr << stockfishPerftDivide << std::endl;
             std::cerr << "---------------------------------------------\n" << std::endl;
             GTEST_FAIL() 
                 << "Perft mismatch for FEN: " << fenString
