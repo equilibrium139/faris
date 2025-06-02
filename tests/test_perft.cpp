@@ -1,6 +1,7 @@
 #include "gtest/gtest.h"
 #include "movegen.h"
 #include "perft_test_case.h"
+#include <iostream>
 
 // TODO: handle maxDepth in a better way
 int maxDepth;
@@ -10,10 +11,26 @@ class PerftTestFixture : public ::testing::TestWithParam<PerftTest> {
 
 TEST_P(PerftTestFixture, VerifyNodeCounts) {
     const PerftTest& testCase = GetParam();
+    std::string fenString = ToFen(testCase.fen);
+    std::cerr << "[ FEN      ]: " << fenString << std::endl; 
     for (const PerftTest::Result& result : testCase.nodeCounts) {
         maxDepth = result.depth;
         std::uint64_t nodeCount = perftest(testCase.fen.board, result.depth, testCase.fen.colorToMove);
-        ASSERT_EQ(result.nodeCount, nodeCount);
+        if (result.nodeCount != nodeCount) {
+            std::cerr << "\n-------- DIAGNOSTICS for FAILED Perft --------\n"
+                      << "FEN: " << fenString << "\n"
+                      << "Depth: " << result.depth
+                      << ", Expected: " << result.nodeCount
+                      << ", Got: " << nodeCount << "\n"
+                      << "Divide output:" << std::endl; 
+            enablePerftDiagnostics = true;
+            perftest(testCase.fen.board, result.depth, testCase.fen.colorToMove);
+            enablePerftDiagnostics = false;
+            std::cerr << "---------------------------------------------\n" << std::endl;
+            GTEST_FAIL() 
+                << "Perft mismatch for FEN: " << fenString
+                << " at Depth: " << result.depth;
+        } 
     }
 }
 

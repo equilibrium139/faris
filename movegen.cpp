@@ -7,8 +7,7 @@
 #include "utilities.h"
 #include "fen.h"
 
-// TODO: take into account castling, en passant, promotion, check, checkmate,
-// stalemate, draw.
+bool enablePerftDiagnostics = false;
 
 int IncrementCastles() {
     static int castles = 0;
@@ -298,21 +297,17 @@ std::uint64_t perftest(const Board& board, int depth, Color colorToMove) {
                                 Board promotionBoard = newBoard;
                                 promotionBoard.PromotePawn(promotionTypes[i], colorToMove);
                                 std::uint64_t movePerftCount = perftest(promotionBoard, depth - 1, opponentColor);
-                                #ifdef PRINT_DIAGNOSTICS
-                                if (depth == maxDepth) {
+                                if (enablePerftDiagnostics && depth == maxDepth) {
                                     printMoveWithCount(squareIndex, oneSquareForwardIndex, movePerftCount);
                                 }
-                                #endif
                                 countLeafNodes += movePerftCount;
                             }
                         } 
                         else {
                             std::uint64_t movePerftCount = perftest(newBoard, depth - 1, opponentColor);
-                            #ifdef PRINT_DIAGNOSTICS
-                            if (depth == maxDepth) {
+                            if (enablePerftDiagnostics && depth == maxDepth) {
                                 printMoveWithCount(squareIndex, oneSquareForwardIndex, movePerftCount);
                             }
-                            #endif
                             countLeafNodes += movePerftCount;
                         }
                     }
@@ -330,11 +325,9 @@ std::uint64_t perftest(const Board& board, int depth, Color colorToMove) {
                                 doublePushBoard.enPassant = twoSquaresForwardIndex;
                                 if (!underThreat(doublePushBoard, originalKingSquareIndex, opponentColor)) {
                                     std::uint64_t movePerftCount = perftest(doublePushBoard, depth - 1, opponentColor);
-                                    #ifdef PRINT_DIAGNOSTICS
-                                    if (depth == maxDepth) {
+                                    if (enablePerftDiagnostics && depth == maxDepth) {
                                         printMoveWithCount(squareIndex, twoSquaresForwardIndex, movePerftCount);
                                     }
-                                    #endif
                                     countLeafNodes += movePerftCount;
                                 }
                             }
@@ -359,23 +352,23 @@ std::uint64_t perftest(const Board& board, int depth, Color colorToMove) {
                                     Board promotionBoard = newBoard;
                                     promotionBoard.PromotePawn(promotionTypes[i], colorToMove);
                                     std::uint64_t movePerftCount = perftest(promotionBoard, depth - 1, opponentColor);
-                                    #ifdef PRINT_DIAGNOSTICS
-                                    if (depth == 1) IncrementCaptures();
-                                    if (depth == maxDepth) {
-                                        printMoveWithCount(squareIndex, leftDiagIndex, movePerftCount);
+                                    if (enablePerftDiagnostics) {
+                                        if (depth == 1) IncrementCaptures();
+                                        if (depth == maxDepth) {
+                                            printMoveWithCount(squareIndex, leftDiagIndex, movePerftCount);
+                                        }
                                     }
-                                    #endif
                                     countLeafNodes += movePerftCount;
                                 }
                             }
                             else {
                                 std::uint64_t movePerftCount = perftest(newBoard, depth - 1, opponentColor);
-                                #ifdef PRINT_DIAGNOSTICS
-                                if (depth == 1) IncrementCaptures();
-                                if (depth == maxDepth) {
-                                    printMoveWithCount(squareIndex, leftDiagIndex, movePerftCount);
+                                if (enablePerftDiagnostics) {
+                                    if (depth == 1) IncrementCaptures();
+                                    if (depth == maxDepth) {
+                                        printMoveWithCount(squareIndex, leftDiagIndex, movePerftCount);
+                                    }
                                 }
-                                #endif
                                 countLeafNodes += movePerftCount;
                             }
                         }
@@ -391,13 +384,13 @@ std::uint64_t perftest(const Board& board, int depth, Color colorToMove) {
                         newBoard.enPassant = 0; // reset en passant
                         if (!underThreat(newBoard, originalKingSquareIndex, opponentColor)) {
                             std::uint64_t movePerftCount = perftest(newBoard, depth - 1, opponentColor);
-                            #ifdef PRINT_DIAGNOSTICS
-                            if (depth == 1) IncrementEnPassant();
-                            if (depth == 1) IncrementCaptures();
-                            if (depth == maxDepth) {
-                                printMoveWithCount(squareIndex, leftDiagIndex, movePerftCount);
+                            if (enablePerftDiagnostics) {
+                                if (depth == 1) IncrementEnPassant();
+                                if (depth == 1) IncrementCaptures();
+                                if (depth == maxDepth) {
+                                    printMoveWithCount(squareIndex, leftDiagIndex, movePerftCount);
+                                }
                             }
-                            #endif
                             countLeafNodes += movePerftCount;
                         }
                     }
@@ -420,23 +413,23 @@ std::uint64_t perftest(const Board& board, int depth, Color colorToMove) {
                                     Board promotionBoard = newBoard;
                                     promotionBoard.PromotePawn(promotionTypes[i], colorToMove);
                                     std::uint64_t movePerftCount = perftest(promotionBoard, depth - 1, opponentColor);
-                                    #ifdef PRINT_DIAGNOSTICS
-                                    if (depth == 1) IncrementCaptures();
-                                    if (depth == maxDepth) {
-                                        printMoveWithCount(squareIndex, rightDiagIndex, movePerftCount);
+                                    if (enablePerftDiagnostics) {
+                                        if (depth == 1) IncrementCaptures();
+                                        if (depth == maxDepth) {
+                                            printMoveWithCount(squareIndex, rightDiagIndex, movePerftCount);
+                                        }
                                     }
-                                    #endif
                                     countLeafNodes += movePerftCount;
                                 }
                             } 
                             else {
                                 std::uint64_t movePerftCount = perftest(newBoard, depth - 1, opponentColor);
-                                #ifdef PRINT_DIAGNOSTICS
-                                if (depth == 1) IncrementCaptures();
-                                if (depth == maxDepth) {
-                                    printMoveWithCount(squareIndex, rightDiagIndex, movePerftCount);
+                                if (enablePerftDiagnostics) {
+                                    if (depth == 1) IncrementCaptures();
+                                    if (depth == maxDepth) {
+                                        printMoveWithCount(squareIndex, rightDiagIndex, movePerftCount);
+                                    }
                                 }
-                                #endif
                                 countLeafNodes += movePerftCount;
                             }
                         }
@@ -450,13 +443,13 @@ std::uint64_t perftest(const Board& board, int depth, Color colorToMove) {
                         newBoard.enPassant = 0; 
                         if (!underThreat(newBoard, originalKingSquareIndex, opponentColor)) {
                             std::uint64_t movePerftCount = perftest(newBoard, depth - 1, opponentColor);
-                            #ifdef PRINT_DIAGNOSTICS
-                            if (depth == 1) IncrementEnPassant();
-                            if (depth == 1) IncrementCaptures();
-                            if (depth == maxDepth) {
-                                printMoveWithCount(squareIndex, rightDiagIndex, movePerftCount);
+                            if (enablePerftDiagnostics) { 
+                                if (depth == 1) IncrementEnPassant();
+                                if (depth == 1) IncrementCaptures();
+                                if (depth == maxDepth) {
+                                    printMoveWithCount(squareIndex, rightDiagIndex, movePerftCount);
+                                }
                             }
-                            #endif
                             countLeafNodes += movePerftCount;
                         }
                     }
@@ -496,12 +489,12 @@ std::uint64_t perftest(const Board& board, int depth, Color colorToMove) {
                     newBoard.enPassant = 0; 
                     if (!underThreat(newBoard, originalKingSquareIndex, opponentColor)) {
                         std::uint64_t movePerftCount = perftest(newBoard, depth - 1, opponentColor);
-                        #ifdef PRINT_DIAGNOSTICS
-                        if (isCapture && depth == 1) IncrementCaptures();
-                        if (depth == maxDepth) {
-                            printMoveWithCount(squareIndex, newSquareIndex, movePerftCount);
+                        if (enablePerftDiagnostics) {
+                            if (isCapture && depth == 1) IncrementCaptures();
+                            if (depth == maxDepth) {
+                                printMoveWithCount(squareIndex, newSquareIndex, movePerftCount);
+                            }
                         }
-                        #endif
                         countLeafNodes += movePerftCount;
                     }
                 }
@@ -583,12 +576,12 @@ std::uint64_t perftest(const Board& board, int depth, Color colorToMove) {
                                     }
                                 }
                                 std::uint64_t movePerftCount = perftest(newBoard, depth - 1, opponentColor);
-                                #ifdef PRINT_DIAGNOSTICS
-                                if (depth == 1) IncrementCaptures();
-                                if (depth == maxDepth) {
-                                    printMoveWithCount(squareIndex, newSquareIndex, movePerftCount);
+                                if (enablePerftDiagnostics) {
+                                    if (depth == 1) IncrementCaptures();
+                                    if (depth == maxDepth) {
+                                        printMoveWithCount(squareIndex, newSquareIndex, movePerftCount);
+                                    }
                                 }
-                                #endif
                                 countLeafNodes += movePerftCount;
                             }
                             break; // Stop sliding after capturing an enemy piece
@@ -611,11 +604,11 @@ std::uint64_t perftest(const Board& board, int depth, Color colorToMove) {
                                     }
                                 }
                                 std::uint64_t movePerftCount = perftest(newBoard, depth - 1, opponentColor);
-                                #ifdef PRINT_DIAGNOSTICS
-                                if (depth == maxDepth) {
-                                    printMoveWithCount(squareIndex, newSquareIndex, movePerftCount);
+                                if (enablePerftDiagnostics) {
+                                    if (depth == maxDepth) {
+                                        printMoveWithCount(squareIndex, newSquareIndex, movePerftCount);
+                                    }
                                 }
-                                #endif
                                 countLeafNodes += movePerftCount;
                             }
                         }
@@ -663,12 +656,12 @@ std::uint64_t perftest(const Board& board, int depth, Color colorToMove) {
                         // prone because it has to be done every recursive call
                         newBoard.enPassant = 0;
                         std::uint64_t movePerftCount = perftest(newBoard, depth - 1, opponentColor);
-                        #ifdef PRINT_DIAGNOSTICS
-                        if (depth == 1 && isCapture) IncrementCaptures();
-                        if (depth == maxDepth) {
-                            printMoveWithCount(squareIndex, newSquareIndex, movePerftCount);
+                        if (enablePerftDiagnostics) {
+                            if (depth == 1 && isCapture) IncrementCaptures();
+                            if (depth == maxDepth) {
+                                printMoveWithCount(squareIndex, newSquareIndex, movePerftCount);
+                            }
                         }
-                        #endif
                         countLeafNodes += movePerftCount;
                     }
                 }
@@ -690,12 +683,12 @@ std::uint64_t perftest(const Board& board, int depth, Color colorToMove) {
                         // no need to check for threat, already checked above
                         newBoard.enPassant = 0;
                         std::uint64_t movePerftCount = perftest(newBoard, depth - 1, opponentColor);
-                        #ifdef PRINT_DIAGNOSTICS
-                        if (depth == 1) IncrementCastles();
-                        if (depth == maxDepth) {
-                            printMoveWithCount(squareIndex, newSquareIndex, movePerftCount);
+                        if (enablePerftDiagnostics) {
+                            if (depth == 1) IncrementCastles();
+                            if (depth == maxDepth) {
+                                printMoveWithCount(squareIndex, newSquareIndex, movePerftCount);
+                            }
                         }
-                        #endif
                         countLeafNodes += movePerftCount;
                     }
                 }
@@ -718,12 +711,12 @@ std::uint64_t perftest(const Board& board, int depth, Color colorToMove) {
                         newBoard.RemoveCastlingRights(colorToMove);
                         newBoard.enPassant = 0;
                         std::uint64_t movePerftCount = perftest(newBoard, depth - 1, opponentColor);
-                        #ifdef PRINT_DIAGNOSTICS
-                        if (depth == 1) IncrementCastles();
-                        if (depth == maxDepth) {
-                            printMoveWithCount(squareIndex, newSquareIndex, movePerftCount);
+                        if (enablePerftDiagnostics) {
+                            if (depth == 1) IncrementCastles();
+                            if (depth == maxDepth) {
+                                printMoveWithCount(squareIndex, newSquareIndex, movePerftCount);
+                            }
                         }
-                        #endif
                         countLeafNodes += movePerftCount;
                     }
                 }

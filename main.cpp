@@ -12,7 +12,7 @@ int main(int argc, char** argv) {
     if (argc > 1) {
         maxDepth = std::atoi(argv[1]);
     }
-    std::string fenString = "r3k2r/p1ppqpb1/bn2pnp1/3PN3/1p2P3/2N2Q1p/PPPBBPPP/R3K2R w KQkq - 0 1";
+    std::string fenString = "r3k2r/Pppp1ppp/1b3nbN/nP6/BBP1P3/q4N2/Pp1P2PP/R2Q1RK1 w kq - 0 1";
     // std::string fenString = "r3k2r/p1ppqpb1/bn2pnp1/3PN3/1p2P3/2N2Q1p/PPPBBPPP/R4RK1 w Qkq - 0 1";
     Fen fen = ParseFen(fenString);
     // Fen fen = parseFEN("rnbqkb1r/pppppppp/8/8/8/8/PPPPPPPP/RNBQKBNR w KQkq - 0 1");
@@ -34,10 +34,10 @@ int main(int argc, char** argv) {
     std::cout << "Fullmove number: " << fen.fullmoveNumber << '\n';
     std::uint64_t perftCount = perftest(fen.board, maxDepth, fen.colorToMove);
     std::cout << "perftest(" << maxDepth << "): " << perftCount << '\n';
-    #ifdef PRINT_DIAGNOSTICS
-    std::cout << "Castles: " << IncrementCastles() - 1 << '\n';
-    std::cout << "Captures: " << IncrementCaptures() - 1 << '\n';
-    std::cout << "En passant: " << IncrementEnPassant() - 1 << '\n';
-    #endif
+    if (enablePerftDiagnostics) {
+        std::cout << "Castles: " << IncrementCastles() - 1 << '\n';
+        std::cout << "Captures: " << IncrementCaptures() - 1 << '\n';
+        std::cout << "En passant: " << IncrementEnPassant() - 1 << '\n';
+    }
     return 0;
 }
