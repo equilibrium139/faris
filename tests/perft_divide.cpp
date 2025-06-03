@@ -1,8 +1,11 @@
-#include "stockfish_divide.h"
+#include "perft_divide.h"
+#include <algorithm>
 #include <array>
 #include <cstdio>
 #include <iostream>
+#include "movegen.h"
 #include <sstream>
+#include <streambuf>
 
 static std::string ExecAndCaptureOutput(const std::string& command) {
     FILE* pipe = popen(command.c_str(), "r"); 
@@ -30,4 +33,24 @@ std::string ComputeStockfishPerftDivide(const std::string &fenString, int depth)
                           "quit\n"
                           "EOF\n";
     return ExecAndCaptureOutput(command);
+}
+
+std::string ComputeFarisPerftDivide(const Board &board, int depth, Color colorToMove) {
+    std::stringstream ss;
+    std::streambuf* oldBuf = std::cout.rdbuf(ss.rdbuf());
+    enablePerftDiagnostics = true;
+    perftest(board, depth, colorToMove);
+    enablePerftDiagnostics = false;
+    std::cout.rdbuf(oldBuf);
+    std::vector<std::string> lines;
+    std::string line;
+    while (std::getline(ss, line)) {
+        lines.push_back(line);
+    }
+    std::sort(lines.begin(), lines.end());
+    std::string output;
+    for (const std::string& l : lines) {
+       output += l + "\n";
+    }
+    return output;
 }

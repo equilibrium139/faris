@@ -21,7 +21,7 @@ FetchContent_MakeAvailable(googletest)
 enable_testing()
 include(CTest)
 
-add_executable(faris-engine-tests fen.cpp movegen.cpp tests/stockfish_divide.cpp utilities.cpp tests/perft_test_case.cpp tests/test_perft.cpp)
+add_executable(faris-engine-tests fen.cpp movegen.cpp tests/perft_divide.cpp utilities.cpp tests/perft_test_case.cpp tests/test_perft.cpp)
 target_link_libraries(faris-engine-tests PRIVATE gtest_main)
 target_include_directories(faris-engine-tests PRIVATE ${CMAKE_CURRENT_SOURCE_DIR})
 
