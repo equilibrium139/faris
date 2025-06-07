@@ -4,8 +4,9 @@
 #include <iostream>
 #include <span>
 #include "board.h"
-#include "utilities.h"
 #include "fen.h"
+#include "attack_bitboards.h"
+#include "utilities.h"
 
 bool enablePerftDiagnostics = false;
 
@@ -138,6 +139,7 @@ static bool underThreat(const Board &board, int squareIndex, Color threatColor) 
         }
     }
 
+    /*
     Bitboard enemyKnightBB = board.Knights(threatColor);
     constexpr int knightMoves[8] = {6, 10, 15, 17, -6, -10, -15, -17};
     for (int moveOffset : knightMoves)
@@ -157,6 +159,11 @@ static bool underThreat(const Board &board, int squareIndex, Color threatColor) 
 		if (enemyKnightBB & ((Bitboard)1 << newSquareIndex)) {
             return true;
 		}
+    }
+    */
+
+    if (knightAttacks[squareIndex] & board.Knights(threatColor)) {
+        return true;
     }
 
 	Bitboard enemyPawnBB = board.Pawns(threatColor);
