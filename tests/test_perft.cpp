@@ -18,25 +18,13 @@ TEST_P(PerftTestFixture, VerifyNodeCounts) {
         maxDepth = result.depth;
         std::uint64_t nodeCount = perftest(testCase.fen.board, result.depth, testCase.fen.colorToMove);
         if (result.nodeCount != nodeCount) {
-
-            // const std::vector<std::string>& farisPerftDivide = perftDivide;
-
-            /* for (const std::string& s : farisPerftDivide) {
-                std::cerr << s << std::endl;
-            }
-            */
-            
-
             std::cerr << "\n-------- DIAGNOSTICS for FAILED Perft --------\n"
                       << "FEN: " << fenString << "\n"
                       << "Depth: " << result.depth
                       << ", Expected: " << result.nodeCount
                       << ", Got: " << nodeCount << "\n"
                       << "Stockfish divide output:" << std::endl; 
-            std::string stockfishPerftDivide = ComputeStockfishPerftDivide(fenString, result.depth); 
-            std::cerr << stockfishPerftDivide << std::endl;
-            std::string farisPerftDivide = ComputeFarisPerftDivide(testCase.fen.board, result.depth, testCase.fen.colorToMove);
-            std::cerr << "Faris divide output:\n" << farisPerftDivide << std::endl;
+            PrintFirstIncorrectMoveChain(fenString, result.depth, testCase.fen.board, testCase.fen.colorToMove);
             std::cerr << "---------------------------------------------\n" << std::endl;
             GTEST_FAIL() 
                 << "Perft mismatch for FEN: " << fenString

@@ -1,6 +1,7 @@
 #include "board.h"
-#include <vector>
 #include <string>
+#include <vector> 
 
-std::string ComputeStockfishPerftDivide(const std::string& fenString, int depth);
-std::string ComputeFarisPerftDivide(const Board& board, int depth, Color colorToMove);
+std::vector<std::string> ComputeStockfishPerftDivide(const std::string& fenString, int depth);
+std::vector<std::string> ComputeFarisPerftDivide(const Board& board, int depth, Color colorToMove);
+void PrintFirstIncorrectMoveChain(const std::string& fenString, int depth, const Board& board, Color colorToMove);

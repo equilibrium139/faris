@@ -24,27 +24,6 @@ int IncrementEnPassant() {
     return ++enPassant;
 }
 
-// TODO: use uint8_t for squareIndex
-// TODO: move to Board, or move all these low-level methods that operate on Board to a different file
-void removePiece(int squareIndex, std::span<Bitboard, 6> pieces) {
-    assert(squareIndex >= 0 && squareIndex < 64);
-    Bitboard captureSquareBB = (Bitboard)1 << squareIndex;
-    for (Bitboard& pieceBoard : pieces) {
-        if (pieceBoard & captureSquareBB) {
-            pieceBoard &= ~captureSquareBB;
-            return;
-        }
-    }
-}
-
-void removePiece(int squareIndex, Board& board, Color colorToRemove) {
-    assert(squareIndex >= 0 && squareIndex < 64);
-    removePiece(squareIndex, board.Bitboards(colorToRemove));
-    board.whiteKingsideCastlingRight = board.whiteKingsideCastlingRight && squareIndex != 7;
-    board.whiteQueensideCastlingRight = board.whiteQueensideCastlingRight && squareIndex != 0;
-    board.blackKingsideCastlingRight = board.blackKingsideCastlingRight && squareIndex != 63;
-    board.blackQueensideCastlingRight = board.blackQueensideCastlingRight && squareIndex != 56;
-}
 /*
 static bool underThreat(const Board& board, int squareIndex, Color threatColor, bool temp) {
     if (knightAttacks[squareIndex] & board.knights[threatColor]) return true;
@@ -343,7 +322,7 @@ std::uint64_t perftest(const Board& board, int depth, Color colorToMove) {
                     if (enemyOccupancy & leftDiagBB) {
                         Board newBoard = board;
                         newBoard.Move(PieceType::Pawn, colorToMove, squareIndex, leftDiagIndex);
-                        removePiece(leftDiagIndex, newBoard, opponentColor);
+                        RemovePiece(leftDiagIndex, newBoard, opponentColor);
                         newBoard.enPassant = 0;
                         if (!underThreat(newBoard, originalKingSquareIndex, opponentColor)) {
                             if (newBoard.Pawns(colorToMove) & promotionRankMask) {
@@ -380,7 +359,7 @@ std::uint64_t perftest(const Board& board, int depth, Color colorToMove) {
                         Board newBoard = board;
                         // TODO: refactor these move and remove calls to a single capture call
                         newBoard.Move(PieceType::Pawn, colorToMove, squareIndex, leftDiagIndex);
-                        removePiece(leftIndex, newBoard, opponentColor);
+                        RemovePiece(leftIndex, newBoard, opponentColor);
                         newBoard.enPassant = 0; // reset en passant
                         if (!underThreat(newBoard, originalKingSquareIndex, opponentColor)) {
                             std::uint64_t movePerftCount = perftest(newBoard, depth - 1, opponentColor);
@@ -404,7 +383,7 @@ std::uint64_t perftest(const Board& board, int depth, Color colorToMove) {
                     if (enemyOccupancy & rightDiagBB) {
                         Board newBoard = board;
                         newBoard.Move(PieceType::Pawn, colorToMove, squareIndex, rightDiagIndex);
-                        removePiece(rightDiagIndex, newBoard, opponentColor);
+                        RemovePiece(rightDiagIndex, newBoard, opponentColor);
                         newBoard.enPassant = 0;
                         if (!underThreat(newBoard, originalKingSquareIndex, opponentColor)) {
                             if (newBoard.Pawns(colorToMove) & promotionRankMask) {
@@ -439,7 +418,7 @@ std::uint64_t perftest(const Board& board, int depth, Color colorToMove) {
                     if (board.enPassant == rightIndex) {
                         Board newBoard = board;
                         newBoard.Move(PieceType::Pawn, colorToMove, squareIndex, rightDiagIndex);
-                        removePiece(rightIndex, newBoard, opponentColor);
+                        RemovePiece(rightIndex, newBoard, opponentColor);
                         newBoard.enPassant = 0; 
                         if (!underThreat(newBoard, originalKingSquareIndex, opponentColor)) {
                             std::uint64_t movePerftCount = perftest(newBoard, depth - 1, opponentColor);
@@ -482,7 +461,7 @@ std::uint64_t perftest(const Board& board, int depth, Color colorToMove) {
                     newBoard.Move(PieceType::Knight, colorToMove, squareIndex, newSquareIndex);
                     bool isCapture = false;
                     if (enemyOccupancy & newSquareBB) { 
-                        removePiece(newSquareIndex, newBoard, opponentColor);
+                        RemovePiece(newSquareIndex, newBoard, opponentColor);
                         isCapture = true;
                     }
                     
@@ -555,7 +534,7 @@ std::uint64_t perftest(const Board& board, int depth, Color colorToMove) {
                         newBoard.Move(pieceInfo.type, colorToMove, squareIndex, newSquareIndex);
                         // TODO: these two blocks can be combined with a break if it's a capture
                         if (enemyOccupancy & newSquareBB) {
-                            removePiece(newSquareIndex, newBoard, opponentColor);
+                            RemovePiece(newSquareIndex, newBoard, opponentColor);
                             
                             newBoard.enPassant = 0; 
                             
@@ -647,7 +626,7 @@ std::uint64_t perftest(const Board& board, int depth, Color colorToMove) {
 
                     bool isCapture = false;
                     if (enemyOccupancy & newSquareBB) {
-                        removePiece(newSquareIndex, newBoard, opponentColor);
+                        RemovePiece(newSquareIndex, newBoard, opponentColor);
                         isCapture = true;
                     }
                     if (!underThreat(newBoard, newSquareIndex, opponentColor)) {
