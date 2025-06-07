@@ -45,3 +45,26 @@ Piece PieceAt(int squareIndex, const Board &board) {
     }
     return {PieceType::None};
 }
+
+// TODO: use uint8_t for squareIndex
+// TODO: move to Board, or move all these low-level methods that operate on Board to a different file
+static void RemovePiece(int squareIndex, std::span<Bitboard, 6> pieces) {
+    assert(squareIndex >= 0 && squareIndex < 64);
+    Bitboard captureSquareBB = (Bitboard)1 << squareIndex;
+    for (Bitboard& pieceBoard : pieces) {
+        if (pieceBoard & captureSquareBB) {
+            pieceBoard &= ~captureSquareBB;
+            return;
+        }
+    }
+}
+
+
+void RemovePiece(int squareIndex, Board& board, Color colorToRemove) {
+    assert(squareIndex >= 0 && squareIndex < 64);
+    RemovePiece(squareIndex, board.Bitboards(colorToRemove));
+    board.whiteKingsideCastlingRight = board.whiteKingsideCastlingRight && squareIndex != 7;
+    board.whiteQueensideCastlingRight = board.whiteQueensideCastlingRight && squareIndex != 0;
+    board.blackKingsideCastlingRight = board.blackKingsideCastlingRight && squareIndex != 63;
+    board.blackQueensideCastlingRight = board.blackQueensideCastlingRight && squareIndex != 56;
+}
