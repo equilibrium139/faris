@@ -104,11 +104,11 @@ Fen ParseFen(const std::string& fenStr) {
         throw std::invalid_argument("Invalid FEN format");
     }
 
+    board.whiteKingsideCastlingRight = false;
+    board.whiteQueensideCastlingRight = false;
+    board.blackKingsideCastlingRight = false;
+    board.blackQueensideCastlingRight = false;
     if (fenStr[fenIdx] == '-') {
-        board.whiteKingsideCastlingRight = false;
-        board.whiteQueensideCastlingRight = false;
-        board.blackKingsideCastlingRight = false;
-        board.blackQueensideCastlingRight = false;
         fenIdx++;
     } else {
         while (fenStr[fenIdx] != ' ') {

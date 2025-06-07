@@ -8,11 +8,11 @@
 int maxDepth;
 
 int main(int argc, char** argv) {
-    maxDepth = 5;
+    maxDepth = 1;
     if (argc > 1) {
         maxDepth = std::atoi(argv[1]);
     }
-    std::string fenString = "r3k2r/Pppp1ppp/1b3nbN/nP6/BBP1P3/q4N2/Pp1P2PP/R2Q1RK1 w kq - 0 1";
+    std::string fenString = "r3k2r/Pppp1ppp/1b3nbN/nPB5/1qP1P3/P4N2/1p1P2PP/R2Q1RK1 w Qkq - 0 1";
     // std::string fenString = "r3k2r/p1ppqpb1/bn2pnp1/3PN3/1p2P3/2N2Q1p/PPPBBPPP/R4RK1 w Qkq - 0 1";
     Fen fen = ParseFen(fenString);
     // Fen fen = parseFEN("rnbqkb1r/pppppppp/8/8/8/8/PPPPPPPP/RNBQKBNR w KQkq - 0 1");
