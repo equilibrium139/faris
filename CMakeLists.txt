@@ -6,7 +6,9 @@ set(CMAKE_CXX_STANDARD 20)
 set(CMAKE_CXX_STANDARD_REQUIRED ON)
 set(CMAKE_CXX_EXTENSIONS OFF)
 
+add_subdirectory(tools/magic)
 add_executable(faris-engine attack_bitboards.cpp fen.cpp main.cpp movegen.cpp utilities.cpp)
+add_dependencies(faris-engine generate_magic)
 
 include(FetchContent)
 FetchContent_Declare(

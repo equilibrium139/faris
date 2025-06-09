@@ -35,7 +35,7 @@ static constexpr int COUNT_BITBOARDS = 12;
 
 static constexpr Bitboard PROMOTION_RANK_MASK[2] = { (Bitboard)0xFF << 56, (Bitboard)0xFF };
 
-using Square = std::uint8_t;
+using Square = std::int8_t;
 
 static constexpr Bitboard ToBitboard(Square s) {
     return (Bitboard)1 << s;
