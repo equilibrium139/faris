@@ -1,16 +1,18 @@
 #include <algorithm>
+#include <bit>
 #include <cmath>
+#include <cstdlib>
+#include <fstream>
 #include <iostream>
-#include <random>
 
 #include "board.h"
 #include "utilities.h"
 
 static constexpr int rookMoves[4] = { 8, -8, 1, -1 };
+static constexpr int rookShift = 64 - 12;
 static constexpr int bishopMoves[4] = { 7, 9, -7, -9 };
 
 static std::uint64_t rookMagics[64];
-static unsigned int rookShifts[64];
 static Bitboard rookMasks[64];
 static Bitboard rookAttacks[64][4096];
 
@@ -64,7 +66,6 @@ static Bitboard GenRookMask(Square square) {
 }
 
 static Bitboard GenBishopMask(Square square) {
-
     Bitboard mask = 0;
     for (int move : bishopMoves) {
         for (Square s = square + move; !OnEdge(s) && ValidBishopMove(square, s); s += move) {
@@ -75,34 +76,29 @@ static Bitboard GenBishopMask(Square square) {
     return mask;
 }
 
-static std::uint64_t GenMagic(int desiredHamming) {
-    static std::random_device rd;
-    static std::mt19937 rng(rd());
-    static std::uniform_int_distribution<uint64_t> dist(1, 63);
-    // return distrib(rng);
+static std::uint64_t RandomUint64() {
+    std::uint64_t u1, u2, u3, u4;
+    u1 = (std::uint64_t)(random()) & 0xFFFF;
+    u2 = (std::uint64_t)(random()) & 0xFFFF;
+    u3 = (std::uint64_t)(random()) & 0xFFFF;
+    u4 = (std::uint64_t)(random()) & 0xFFFF;
+    return u1 | (u2 << 16) | (u3 << 32) | (u4 << 48);
+}
 
-    std::uint64_t magic = 1; // ensure number is odd
-    int count = 1;
-    while (count < desiredHamming) {
-        int b = dist(rng);
-        if (!(magic & (1ULL << b))) {
-            magic |= (1ULL << b);
-            ++count;
-        }
-    }
-
-    return magic;
+// apparently this finds magics faster than the way I was doing before
+// https://www.chessprogramming.org/Looking_for_Magics 
+static std::uint64_t GenMagic() {
+    return RandomUint64() & RandomUint64() & RandomUint64(); 
 }
 
 static Bitboard GenRookAttackBitboard(Square square, Bitboard occupancy) {
     Bitboard attackBitboard = 0;
     for (int move : rookMoves) {
-        Square from = square;
-        for (Square s = square + move; ValidRookMove(square, from); s += move) {
+        if (!ValidRookMove(square, square + move)) continue;
+        for (Square s = square + move; ; s += move) {
             Bitboard sBB = ToBitboard(s);
             attackBitboard |= sBB;
-            from = s;
-            if (occupancy & sBB) { 
+            if ((occupancy & sBB) || RookReachedEdge(s, move)) { 
                 break;
             }
         }
@@ -120,42 +116,47 @@ static void GenRookAttackBitboardArray() {
                 oneIndices.push_back(i);
             }
         }
-        int countOnes = oneIndices.size();
-        int shiftAmount = 64 - countOnes;
-        rookShifts[square] = shiftAmount;
-        const std::uint32_t maxPermutationValue = std::pow(2, countOnes) - 1;
-        std::uint64_t magic;
-        Bitboard attackBitboards[4096];
-        while (true) {
-            magic = GenMagic(countOnes);
-            bool goodMagic = true;
-            std::fill(attackBitboards, attackBitboards + 4096, 0);
-            std::unordered_map<int, Bitboard> occupancyIdxBitboardMap;
-            for (std::uint32_t i = 0; i <= maxPermutationValue; i++) {
-                Bitboard occupancyPermutation = 0;
-                for (int j = 0; j < oneIndices.size(); j++) {
-                    if (i & (1ULL << j)) {
-                        occupancyPermutation |= (1ULL << oneIndices[j]);
-                    }
+        // 4096 is an upper bound
+        constexpr std::uint32_t countPermutations = 4096;
+
+        bool idxUsed[countPermutations];
+        Bitboard occupancyPermutations[countPermutations];
+        Bitboard attackBitboards[countPermutations];
+        for (std::uint32_t i = 0; i < countPermutations; i++) {
+            occupancyPermutations[i] = 0;
+            for (std::uint32_t j = 0; j < oneIndices.size(); j++) {
+                if (i & (1ULL << j)) {
+                    occupancyPermutations[i] |= (1ULL << oneIndices[j]);
                 }
-                int permutationIdx = (occupancyPermutation * magic) >> shiftAmount;
-                Bitboard attackBitboard = GenRookAttackBitboard(square, occupancyPermutation);
-                attackBitboards[permutationIdx] = attackBitboard;
+            }
+            attackBitboards[i] = GenRookAttackBitboard(square, occupancyPermutations[i]);
+        }
+        std::uint64_t magic;
+        while (true) {
+            magic = GenMagic();
+            // see chessprogramming link above for this weirdness
+            if (std::popcount((mask * magic) & 0xFF00000000000000ULL) < 6) { continue; }
+            bool goodMagic = true;
+            std::fill(idxUsed, idxUsed + countPermutations, false);
+            for (std::uint32_t i = 0; i < countPermutations; i++) {
+                Bitboard occupancyPermutation = occupancyPermutations[i];
+                int permutationIdx = (occupancyPermutation * magic) >> rookShift;
                 // bad collision = bad magic number
-                if (occupancyIdxBitboardMap.contains(permutationIdx) && occupancyIdxBitboardMap[permutationIdx] != attackBitboard) {
+                if (idxUsed[permutationIdx] && rookAttacks[square][permutationIdx] != attackBitboards[i]) {
                     goodMagic = false;
                     break;
-                } 
+                }
                 else {
-                    occupancyIdxBitboardMap[permutationIdx] = attackBitboard;
+                    idxUsed[permutationIdx] = true;
+                    rookAttacks[square][permutationIdx] = attackBitboards[i];
                 }
             }
             if (goodMagic) {
+                std::cout << magic << std::endl;
+                rookMagics[square] = magic;
                 break;
             }
         }
-        rookMagics[square] = magic;
-        std::copy(attackBitboards, attackBitboards + 4096, rookAttacks[square]);
     }
 }
 
