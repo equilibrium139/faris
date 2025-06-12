@@ -39,70 +39,20 @@ static bool underThreat(const Board& board, int squareIndex, Color threatColor, 
 */
 
 static bool underThreat(const Board &board, int squareIndex, Color threatColor) {
-    Bitboard bb = (Bitboard)1 << squareIndex;
+    if (knightAttacks[squareIndex] & board.Knights(threatColor)) { return true; }
+    if (pawnAttacks[ToggleColor(threatColor)][squareIndex] & board.Pawns(threatColor)) { return true; }
+    if (kingAttacks[squareIndex] & board.Kings(threatColor)) { return true; } 
 
     Bitboard enemyQueenBB = board.Queens(threatColor);
     Bitboard enemyRookBB = board.Rooks(threatColor);
-    Bitboard enemyBishopBB = board.Bishops(threatColor);
     Bitboard occupancy = board.Occupancy();
 
     Bitboard rookAttack = RookAttack(squareIndex, occupancy);
     if (rookAttack & (enemyRookBB | enemyQueenBB)) { return true; }
 
+    Bitboard enemyBishopBB = board.Bishops(threatColor);
     Bitboard bishopAttack = BishopAttack(squareIndex, occupancy);
     if (bishopAttack & (enemyBishopBB | enemyQueenBB)) { return true; }
-
-    if (knightAttacks[squareIndex] & board.Knights(threatColor)) {
-        return true;
-    }
-
-    const int squareRank = squareIndex / 8;
-    const int squareFile = squareIndex % 8;
-	Bitboard enemyPawnBB = board.Pawns(threatColor);
-    int pawnCaptureOffsets[2] = {7, 9};
-    if (threatColor == Color::White) 
-    {
-        pawnCaptureOffsets[0] *= -1;
-        pawnCaptureOffsets[1] *= -1;
-    }
-    for (int i = 0; i < 2; i++)
-    {
-        int newSquareIndex = squareIndex + pawnCaptureOffsets[i];
-        if (newSquareIndex < 0 || newSquareIndex >= 64)
-            continue;
-
-        int newFile = newSquareIndex % 8;
-        int newRank = newSquareIndex / 8;
-
-        bool validMove = (std::abs(newFile - squareFile) == 1 && std::abs(newRank - squareRank) == 1);
-        if (!validMove)
-        {
-            continue;
-        }
-		if (enemyPawnBB & ((Bitboard)1 << newSquareIndex)) {
-			return true;
-		}
-    }
-
-    Bitboard enemyKingBB = board.Kings(threatColor); 
-    int kingAttackOffsets[8] = {7, 9, -7, -9, 8, -8, 1, -1};
-    for (int offset : kingAttackOffsets)
-    {
-        int attackedSquare = squareIndex + offset;
-        if (attackedSquare < 0 || attackedSquare >= 64)
-            continue;
-
-        // Check for board wrap-around for king moves
-        int attackedFile = attackedSquare % 8;
-        int attackedRank = attackedSquare / 8;
-        if (std::abs(attackedFile - squareFile) > 1 || std::abs(attackedRank - squareRank) > 1)
-            continue;
-
-        if (((Bitboard)1 << attackedSquare) & enemyKingBB)
-        {
-            return true;
-        }
-    }
 
     return false;
 }
