@@ -2,6 +2,7 @@
 #include "board.h"
 #include "magic.h"
 #include <cstdlib>
+#include <immintrin.h>
 
 static std::array<Bitboard, 64> GenKnightAttacks() {
     constexpr int knightMoves[8] = {6, 10, 15, 17, -6, -10, -15, -17};
@@ -86,15 +87,25 @@ std::array<std::array<Bitboard, 64>, 2> pawnAttacks = GenPawnAttacks();
 std::array<Bitboard, 64> kingAttacks = GenKingAttacks();
 
 Bitboard RookAttack(Square square, Bitboard occupancy) {
+#ifdef USE_PEXT
+    std::uint64_t idx = _pext_u64(occupancy, rookMask[square]);
+    return rookAttacks[square][idx];
+#else
     std::uint64_t magic = rookMagic[square];
     Bitboard mask = occupancy & rookMask[square];
     const unsigned int rookAttackIdx = (mask * magic) >> 52; 
     return rookAttacks[square][rookAttackIdx];
+#endif
 }
 
 Bitboard BishopAttack(Square square, Bitboard occupancy) {
+#ifdef USE_PEXT
+    std::uint64_t idx = _pext_u64(occupancy, bishopMask[square]);
+    return bishopAttacks[square][idx];
+#else
     std::uint64_t magic = bishopMagic[square];
     Bitboard mask = occupancy & bishopMask[square];
     const unsigned int bishopAttackIdx = (mask * magic) >> 55; 
     return bishopAttacks[square][bishopAttackIdx];
+#endif
 }

@@ -2,6 +2,7 @@
 #include <cmath>
 #include <cstdlib>
 #include <fstream>
+#include <immintrin.h>
 #include <iostream>
 #include <vector>
 
@@ -9,15 +10,18 @@
 #include "utilities.h"
 
 static constexpr int rookMoves[4] = { 8, -8, 1, -1 };
-static constexpr int rookShift = 64 - 12; // 12 is upper bound for popcount(rookMasks[i])
 static constexpr int bishopMoves[4] = { 7, 9, -7, -9 };
-static constexpr int bishopShift = 64 - 9; // 9 is upper bound for popcount(bishopMasks[i])
 
+#ifndef USE_PEXT
 static std::uint64_t rookMagics[64];
+static std::uint64_t bishopMagics[64];
+static constexpr int rookShift = 64 - 12; // 12 is upper bound for popcount(rookMasks[i])
+static constexpr int bishopShift = 64 - 9; // 9 is upper bound for popcount(bishopMasks[i])
+#endif 
+
 static Bitboard rookMasks[64];
 static Bitboard rookAttacks[64][4096];
 
-static std::uint64_t bishopMagics[64];
 static Bitboard bishopMasks[64];
 static Bitboard bishopAttacks[64][512];
 
@@ -133,8 +137,10 @@ static void GenAttackBitboardArray(bool rook) {
     Bitboard* masks = rook ? rookMasks : bishopMasks;
     const unsigned int countPermutations = rook ? 4096 : 512;
     auto GenAttackBitboardFunc = rook ? GenRookAttackBitboard : GenBishopAttackBitboard;
+#ifndef USE_PEXT
     auto magics = rook ? rookMagics : bishopMagics;
     const int shift = rook ? rookShift : bishopShift;
+#endif
 
     for (Square square = 0; square < 64; square++) {
         auto squareAttacks = rook ? rookAttacks[square] : bishopAttacks[square];
@@ -147,7 +153,6 @@ static void GenAttackBitboardArray(bool rook) {
             }
         }
 
-        std::vector<bool> idxUsed(countPermutations, false);
         std::vector<Bitboard> occupancyPermutations(countPermutations);
         std::vector<Bitboard> attackBitboards(countPermutations);
         for (std::uint32_t i = 0; i < countPermutations; i++) {
@@ -157,8 +162,15 @@ static void GenAttackBitboardArray(bool rook) {
                     occupancyPermutations[i] |= (1ULL << oneIndices[j]);
                 }
             }
+#ifdef USE_PEXT
+            std::uint64_t idx = _pext_u64(occupancyPermutations[i], mask);
+            squareAttacks[idx] = GenAttackBitboardFunc(square, occupancyPermutations[i]);
+#else
             attackBitboards[i] = GenAttackBitboardFunc(square, occupancyPermutations[i]);
+#endif
         }
+#ifndef USE_PEXT
+        std::vector<bool> idxUsed(countPermutations, false);
         std::uint64_t magic;
         while (true) {
             magic = GenMagic();
@@ -184,6 +196,7 @@ static void GenAttackBitboardArray(bool rook) {
                 break;
             }
         }
+#endif
     }
 }
 
@@ -207,12 +220,13 @@ int main(int argc, char** argv) {
         outputFile << rookMasks[i] << "ULL,";
     }
 
+#ifndef USE_PEXT
     outputFile << "};\nstatic constexpr std::uint64_t rookMagic[64] = {";
     
     for (int i = 0; i < 64; i++) {
         outputFile << rookMagics[i] << "ULL,";
     }
-
+#endif
     outputFile << "};\nstatic constexpr std::uint64_t rookAttacks[64][4096] = {";
 
     for (int i = 0; i < 64; i++) {
@@ -227,11 +241,13 @@ int main(int argc, char** argv) {
         outputFile << bishopMasks[i] << "ULL,";
     }
 
+#ifndef USE_PEXT
     outputFile << "};\nstatic constexpr std::uint64_t bishopMagic[64] = {";
     
     for (int i = 0; i < 64; i++) {
         outputFile << bishopMagics[i] << "ULL,";
     }
+#endif
 
     outputFile << "};\nstatic constexpr std::uint64_t bishopAttacks[64][512] = {";
 
