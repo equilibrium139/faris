@@ -41,131 +41,23 @@ static bool underThreat(const Board& board, int squareIndex, Color threatColor, 
 static bool underThreat(const Board &board, int squareIndex, Color threatColor) {
     Bitboard bb = (Bitboard)1 << squareIndex;
 
-    // Check up, down, left, right for rook/queen
     Bitboard enemyQueenBB = board.Queens(threatColor);
     Bitboard enemyRookBB = board.Rooks(threatColor);
-    Bitboard occupancy = board.Occupancy();
-    const int squareRank = squareIndex / 8;
-    const int squareFile = squareIndex % 8;
-    for (int rank = squareRank + 1; rank < 8; rank++)
-    {
-        int index = rank * 8 + squareFile;
-        Bitboard indexBB = (Bitboard)1 << index;
-        if ((enemyQueenBB & indexBB) || (enemyRookBB & indexBB)) {
-            return true;
-        }
-        if (occupancy & indexBB) {// friendly or enemy non-rook/queen piece, no need to continue
-            break;
-        }
-    }
-    for (int rank = squareRank - 1; rank >= 0; rank--)
-    {
-        int index = rank * 8 + squareFile;
-		Bitboard indexBB = (Bitboard)1 << index;
-		if ((enemyQueenBB & indexBB) || (enemyRookBB & indexBB)) {
-			return true;
-		}
-		if (occupancy & indexBB) {// friendly or enemy non-rook/queen piece, no need to continue
-			break;
-		}
-    }
-    for (int file = squareFile + 1; file < 8; file++)
-    {
-        int index = squareRank * 8 + file;
-		Bitboard indexBB = (Bitboard)1 << index;
-		if ((enemyQueenBB & indexBB) || (enemyRookBB & indexBB)) {
-			return true;
-		}
-		if (occupancy & indexBB) {// friendly or enemy non-rook/queen piece, no need to continue
-			break;
-		}
-    }
-    for (int file = squareFile - 1; file >= 0; file--)
-    {
-        int index = squareRank * 8 + file;
-        Bitboard indexBB = (Bitboard)1 << index;
-        if ((enemyQueenBB & indexBB) || (enemyRookBB & indexBB)) {
-            return true;
-        }
-        if (occupancy & indexBB) {// friendly or enemy non-rook/queen piece, no need to continue
-            break;
-        }
-    }
-
-    // Check diagonals for bishop/queen
     Bitboard enemyBishopBB = board.Bishops(threatColor);
-    for (int rank = squareRank + 1, file = squareFile + 1; rank < 8 && file < 8; rank++, file++)
-    {
-        int index = rank * 8 + file;
-		Bitboard indexBB = (Bitboard)1 << index;
-		if ((enemyQueenBB & indexBB) || (enemyBishopBB & indexBB)) {
-			return true;
-		}
-		if (occupancy & indexBB) {// friendly or enemy non-bishop/queen piece, no need to continue
-			break;
-		}
-    }
-    for (int rank = squareRank + 1, file = squareFile - 1; rank < 8 && file >= 0; rank++, file--)
-    {
-        int index = rank * 8 + file;
-		Bitboard indexBB = (Bitboard)1 << index;
-		if ((enemyQueenBB & indexBB) || (enemyBishopBB & indexBB)) {
-			return true;
-		}
-        if (occupancy & indexBB) {// friendly or enemy non-bishop/queen piece, no need to continue
-            break;
-        }
-    }
-    for (int rank = squareRank - 1, file = squareFile + 1; rank >= 0 && file < 8; rank--, file++)
-    {
-        int index = rank * 8 + file;
-        Bitboard indexBB = (Bitboard)1 << index;
-        if ((enemyQueenBB & indexBB) || (enemyBishopBB & indexBB)) {
-            return true;
-        }
-        if (occupancy & indexBB) {// friendly or enemy non-bishop/queen piece, no need to continue
-            break;
-        }
-    }
-    for (int rank = squareRank - 1, file = squareFile - 1; rank >= 0 && file >= 0; rank--, file--)
-    {
-        int index = rank * 8 + file;
-        Bitboard indexBB = (Bitboard)1 << index;
-        if ((enemyQueenBB & indexBB) || (enemyBishopBB & indexBB)) {
-            return true;
-        }
-        if (occupancy & indexBB) {// friendly or enemy non-bishop/queen piece, no need to continue
-            break;
-        }
-    }
+    Bitboard occupancy = board.Occupancy();
 
-    /*
-    Bitboard enemyKnightBB = board.Knights(threatColor);
-    constexpr int knightMoves[8] = {6, 10, 15, 17, -6, -10, -15, -17};
-    for (int moveOffset : knightMoves)
-    {
-        int newSquareIndex = squareIndex + moveOffset;
-        if (newSquareIndex < 0 || newSquareIndex >= 64)
-            continue;
+    Bitboard rookAttack = RookAttack(squareIndex, occupancy);
+    if (rookAttack & (enemyRookBB | enemyQueenBB)) { return true; }
 
-        int newFile = newSquareIndex % 8;
-        int newRank = newSquareIndex / 8;
-
-        bool validMove = (std::abs(newFile - squareFile) == 1 && std::abs(newRank - squareRank) == 2) ||
-                         (std::abs(newFile - squareFile) == 2 && std::abs(newRank - squareRank) == 1);
-        if (!validMove) {
-            continue;
-        }
-		if (enemyKnightBB & ((Bitboard)1 << newSquareIndex)) {
-            return true;
-		}
-    }
-    */
+    Bitboard bishopAttack = BishopAttack(squareIndex, occupancy);
+    if (bishopAttack & (enemyBishopBB | enemyQueenBB)) { return true; }
 
     if (knightAttacks[squareIndex] & board.Knights(threatColor)) {
         return true;
     }
 
+    const int squareRank = squareIndex / 8;
+    const int squareFile = squareIndex % 8;
 	Bitboard enemyPawnBB = board.Pawns(threatColor);
     int pawnCaptureOffsets[2] = {7, 9};
     if (threatColor == Color::White) 

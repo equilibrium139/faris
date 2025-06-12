@@ -1,5 +1,6 @@
 #include "attack_bitboards.h"
 #include "board.h"
+#include "magic.h"
 #include <cstdlib>
 
 static std::array<Bitboard, 64> GenKnightAttacks() {
@@ -29,3 +30,17 @@ static std::array<Bitboard, 64> GenKnightAttacks() {
 }
 
 std::array<Bitboard, 64> knightAttacks = GenKnightAttacks();
+
+Bitboard RookAttack(Square square, Bitboard occupancy) {
+    std::uint64_t magic = rookMagic[square];
+    Bitboard mask = occupancy & rookMask[square];
+    const unsigned int rookAttackIdx = (mask * magic) >> 52; 
+    return rookAttacks[square][rookAttackIdx];
+}
+
+Bitboard BishopAttack(Square square, Bitboard occupancy) {
+    std::uint64_t magic = bishopMagic[square];
+    Bitboard mask = occupancy & bishopMask[square];
+    const unsigned int bishopAttackIdx = (mask * magic) >> 55; 
+    return bishopAttacks[square][bishopAttackIdx];
+}
