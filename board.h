@@ -1,5 +1,6 @@
 #pragma once
 
+#include <bit>
 #include <cassert>
 #include <cstdint>
 #include <span>
@@ -36,6 +37,16 @@ static constexpr int COUNT_BITBOARDS = 12;
 static constexpr Bitboard PROMOTION_RANK_MASK[2] = { (Bitboard)0xFF << 56, (Bitboard)0xFF };
 
 using Square = std::int8_t;
+
+static constexpr Square LSB(Bitboard b) {
+    return std::countr_zero(b);
+}
+
+static constexpr Square PopLSB(Bitboard& b) {
+    Square s = std::countr_zero(b);
+    b &= b - 1;
+    return s;
+}
 
 static constexpr Bitboard ToBitboard(Square s) {
     return (Bitboard)1 << s;
