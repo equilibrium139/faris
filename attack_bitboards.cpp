@@ -109,3 +109,7 @@ Bitboard BishopAttack(Square square, Bitboard occupancy) {
     return bishopAttacks[square][bishopAttackIdx];
 #endif
 }
+
+Bitboard QueenAttack(Square square, Bitboard occupancy) {
+    return RookAttack(square, occupancy) | BishopAttack(square, occupancy);
+}

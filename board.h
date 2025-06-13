@@ -34,7 +34,11 @@ static constexpr int BLACK_PIECE_OFFSET = 6;
 static constexpr int COLOR_OFFSET[2] = { 0, 6 }; // Matches order of Color enum
 static constexpr int COUNT_BITBOARDS = 12;
 
+static constexpr Bitboard RANK_MASK[8] = { 0xFFULL, 0xFFULL << 8, 0xFFULL << 16, 0xFFULL << 24, 0xFFULL << 32, 0xFFULL << 40, 0xFFULL << 48, 0xFFULL << 56 };
 static constexpr Bitboard PROMOTION_RANK_MASK[2] = { (Bitboard)0xFF << 56, (Bitboard)0xFF };
+// TODO: finish file mask and use for pawn attack gen
+static constexpr Bitboard fileAMask = 0x1ULL | 0x1ULL << 8 | 0x1ULL << 16 | 0x1ULL << 24 | 0x1ULL << 32 | 0x1ULL << 40 | 0x1ULL << 48 | 0x1ULL << 56;
+static constexpr Bitboard FILE_MASK[8] = { fileAMask, fileAMask << 1, fileAMask << 2, fileAMask << 3, fileAMask << 4, fileAMask << 5, fileAMask << 6, fileAMask << 7 };
 
 using Square = std::int8_t;
 
