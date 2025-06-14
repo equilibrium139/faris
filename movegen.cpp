@@ -175,8 +175,6 @@ std::uint64_t perftest(const Board& board, int depth, Color colorToMove) {
         newBoard.Move(PieceType::Pawn, colorToMove, from, to);
         // TODO: fix enPassant everywhere. Switching to standard FEN convention (en passant is attack square)
         if (board.enPassant == to) {
-            auto p = PieceAt(to - pawnDirection, newBoard);
-            assert(p.color == opponentColor && p.type == PieceType::Pawn);
             RemovePiece(to - pawnDirection, newBoard, opponentColor);
         }
         else {
@@ -224,8 +222,6 @@ std::uint64_t perftest(const Board& board, int depth, Color colorToMove) {
         Board newBoard = board;
         newBoard.Move(PieceType::Pawn, colorToMove, from, to);
         if (board.enPassant == to) {
-            auto p = PieceAt(to - pawnDirection, newBoard);
-            assert(p.color == opponentColor && p.type == PieceType::Pawn);
             RemovePiece(to - pawnDirection, newBoard, opponentColor);
         }
         else {

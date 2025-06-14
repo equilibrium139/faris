@@ -141,13 +141,6 @@ Fen ParseFen(const std::string& fenStr) {
     } else {
         int file = fenStr[fenIdx] - 'a';
         int rank = fenStr[fenIdx + 1] - '1';
-        // My convention is to use the destination square for en passant, not the potential capture square as FEN notation does. This converts
-        // the FEN notation to my convention. example: 1. e4 sets en passant square to e4, not e3 like fen.
-        if (fen.colorToMove == Color::White) {
-            rank--;
-        } else {
-            rank++;
-        }
         if (file < 0 || file > 7 || rank < 0 || rank > 7) {
             throw std::invalid_argument("Invalid FEN format");
         }
