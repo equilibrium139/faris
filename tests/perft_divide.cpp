@@ -1,4 +1,5 @@
 #include "perft_divide.h"
+#include "perft.h"
 #include <algorithm>
 #include <array>
 #include <cstdio>
@@ -52,13 +53,11 @@ std::vector<std::string> ComputeStockfishPerftDivide(const std::string &fenStrin
     return ToSortedLines(output);
 }
 
-std::vector<std::string> ComputeFarisPerftDivide(const Board &board, int depth, Color colorToMove) {
+std::vector<std::string> ComputeFarisPerftDivide(Board &board, int depth, Color colorToMove) {
     std::stringstream ss;
     std::streambuf* oldBuf = std::cout.rdbuf(ss.rdbuf());
-    enablePerftDiagnostics = true;
     maxDepth = depth;
-    perftest(board, depth, colorToMove);
-    enablePerftDiagnostics = false;
+    perftest(board, depth, colorToMove, true);
     std::cout.rdbuf(oldBuf);
     return ToSortedLines(ss.str());
 }

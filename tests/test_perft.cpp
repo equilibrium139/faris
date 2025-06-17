@@ -1,5 +1,6 @@
 #include "gtest/gtest.h"
 #include "movegen.h"
+#include "perft.h"
 #include "perft_test_case.h"
 #include "perft_divide.h"
 #include <iostream>
@@ -16,7 +17,8 @@ TEST_P(PerftTestFixture, VerifyNodeCounts) {
     std::cerr << "[ FEN      ]: " << fenString << std::endl; 
     for (const PerftTest::Result& result : testCase.nodeCounts) {
         maxDepth = result.depth;
-        std::uint64_t nodeCount = perftest(testCase.fen.board, result.depth, testCase.fen.colorToMove);
+        Board board = testCase.fen.board;
+        std::uint64_t nodeCount = perftest(board, result.depth, testCase.fen.colorToMove);
         if (result.nodeCount != nodeCount) {
             std::cerr << "\n-------- DIAGNOSTICS for FAILED Perft --------\n"
                       << "FEN: " << fenString << "\n"

@@ -104,25 +104,23 @@ Fen ParseFen(const std::string& fenStr) {
         throw std::invalid_argument("Invalid FEN format");
     }
 
-    board.whiteKingsideCastlingRight = false;
-    board.whiteQueensideCastlingRight = false;
-    board.blackKingsideCastlingRight = false;
-    board.blackQueensideCastlingRight = false;
+    board.shortCastlingRight[White] = board.shortCastlingRight[Black] = false;
+    board.longCastlingRight[White] = board.longCastlingRight[Black] = false;
     if (fenStr[fenIdx] == '-') {
         fenIdx++;
     } else {
         while (fenStr[fenIdx] != ' ') {
             if (fenStr[fenIdx] == 'K') {
-                board.whiteKingsideCastlingRight = true;
+                board.shortCastlingRight[White] = true;
                 fenIdx++;
             } else if (fenStr[fenIdx] == 'Q') {
-                board.whiteQueensideCastlingRight = true;
+                board.longCastlingRight[White] = true;
                 fenIdx++;
             } else if (fenStr[fenIdx] == 'k') {
-                board.blackKingsideCastlingRight = true;
+                board.shortCastlingRight[Black] = true;
                 fenIdx++;
             } else if (fenStr[fenIdx] == 'q') {
-                board.blackQueensideCastlingRight = true;
+                board.longCastlingRight[Black] = true;
                 fenIdx++;
             } else {
                 throw std::invalid_argument("Invalid FEN format");
@@ -136,7 +134,7 @@ Fen ParseFen(const std::string& fenStr) {
     }
 
     if (fenStr[fenIdx] == '-') {
-        board.enPassant = 0;
+        board.enPassant = -1;
         fenIdx++;
     } else {
         int file = fenStr[fenIdx] - 'a';
@@ -217,23 +215,23 @@ std::string ToFen(const Fen& fen) {
     fenStr += ' ';
     fenStr += fen.colorToMove == Color::White ? 'w' : 'b';
     fenStr += ' ';
-    if (fen.board.whiteKingsideCastlingRight) {
+    if (fen.board.shortCastlingRight[White]) {
         fenStr += 'K';
     }
-    if (fen.board.whiteQueensideCastlingRight) {
+    if (fen.board.longCastlingRight[White]) {
         fenStr += 'Q';
     }
-    if (fen.board.blackKingsideCastlingRight) {
+    if (fen.board.shortCastlingRight[Black]) {
         fenStr += 'k';
     }
-    if (fen.board.blackQueensideCastlingRight) {
+    if (fen.board.longCastlingRight[Black]) {
         fenStr += 'q';
     }
     if (fenStr.back() == ' ') {
         fenStr += '-';
     } 
     fenStr += ' ';
-    if (fen.board.enPassant == 0) {
+    if (fen.board.enPassant < 0) {
         fenStr += '-';
     } else {
         int file = fen.board.enPassant % 8;

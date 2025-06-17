@@ -11,6 +11,7 @@ enum class Rank : std::uint8_t {
 };
 
 using Bitboard = std::uint64_t;
+using Square = std::int8_t;
 static constexpr Bitboard WP_START = 0xFF00ULL;
 static constexpr Bitboard WN_START = (1 << 1) | (1 << 6);
 static constexpr Bitboard WB_START = (1 << 2) | (1 << 5);
@@ -33,14 +34,13 @@ static constexpr int WHITE_PIECE_OFFSET = 0;
 static constexpr int BLACK_PIECE_OFFSET = 6;
 static constexpr int COLOR_OFFSET[2] = { 0, 6 }; // Matches order of Color enum
 static constexpr int COUNT_BITBOARDS = 12;
+static constexpr Square STARTING_KING_SQUARE[2] = { 4, 60 };
 
 static constexpr Bitboard RANK_MASK[8] = { 0xFFULL, 0xFFULL << 8, 0xFFULL << 16, 0xFFULL << 24, 0xFFULL << 32, 0xFFULL << 40, 0xFFULL << 48, 0xFFULL << 56 };
 static constexpr Bitboard PROMOTION_RANK_MASK[2] = { (Bitboard)0xFF << 56, (Bitboard)0xFF };
 // TODO: finish file mask and use for pawn attack gen
 static constexpr Bitboard fileAMask = 0x1ULL | 0x1ULL << 8 | 0x1ULL << 16 | 0x1ULL << 24 | 0x1ULL << 32 | 0x1ULL << 40 | 0x1ULL << 48 | 0x1ULL << 56;
 static constexpr Bitboard FILE_MASK[8] = { fileAMask, fileAMask << 1, fileAMask << 2, fileAMask << 3, fileAMask << 4, fileAMask << 5, fileAMask << 6, fileAMask << 7 };
-
-using Square = std::int8_t;
 
 static constexpr Square LSB(Bitboard b) {
     return std::countr_zero(b);
@@ -56,7 +56,7 @@ static constexpr Bitboard ToBitboard(Square s) {
     return (Bitboard)1 << s;
 }
 
-enum class PieceType {
+enum class PieceType : std::uint8_t {
     Pawn, Knight, Bishop, Rook, Queen, King, None
 };
 
@@ -97,23 +97,15 @@ struct Board {
         Bitboard bitboards[COUNT_BITBOARDS];
     };
 
-    std::uint8_t enPassant;
+    Square enPassant = -1;
     // These only indicate if the king and corresponding rook have moved,
     // not if castling is currently possible (intermediate squares clear/unattacked).
-    bool whiteKingsideCastlingRight = true;
-    bool whiteQueensideCastlingRight = true;
-    bool blackKingsideCastlingRight = true;
-    bool blackQueensideCastlingRight = true;
+    bool shortCastlingRight[2] = { true, true };
+    bool longCastlingRight[2] = { true,  true };
 
-    bool KingsideCastlingRight(Color color) const { return color == Color::White ? whiteKingsideCastlingRight : blackKingsideCastlingRight; }
-    bool QueensideCastlingRight(Color color) const { return color == Color::White ? whiteQueensideCastlingRight : blackQueensideCastlingRight; }
     void RemoveCastlingRights(Color color) {
-        if (color == Color::White) {
-            whiteKingsideCastlingRight = whiteQueensideCastlingRight = false;
-        }
-        else {
-            blackKingsideCastlingRight = blackQueensideCastlingRight = false;
-        }
+        shortCastlingRight[color] = false;
+        longCastlingRight[color] = false;
     }
 
     Bitboard WhiteOccupancy() const {
@@ -162,15 +154,11 @@ struct Board {
         bitboards[(int)type + COLOR_OFFSET[c]] &= ~ToBitboard(from);
         bitboards[(int)type + COLOR_OFFSET[c]] |= ToBitboard(to);
     }
-
-    void PromotePawn(PieceType promotionType, Color c) {
-        Bitboard pawns = Pawns(c);
-        Bitboard promotionRankMask = PROMOTION_RANK_MASK[(int)c];
-        Bitboard promotionRankBB = pawns & promotionRankMask;
-        assert(promotionRankBB != 0);
-        bitboards[(int)promotionType + COLOR_OFFSET[c]] |= promotionRankBB;
-        pawns &= ~promotionRankMask;
-        bitboards[PAWN_OFFSET + COLOR_OFFSET[c]] = pawns;
+    
+    void PromotePawn(PieceType promotionType, Color c, Square square) {
+        Bitboard squareBB = ToBitboard(square);
+        bitboards2D[c][(int)PieceType::Pawn] &= ~squareBB;
+        bitboards2D[c][(int)promotionType] |= squareBB;
     }
 
     bool operator==(const Board& other) const {
@@ -186,7 +174,11 @@ struct Board {
                blackRooks == other.blackRooks &&
                blackQueens == other.blackQueens &&
                blackKing == other.blackKing &&
-               enPassant == other.enPassant;
+               enPassant == other.enPassant &&
+               shortCastlingRight[White] == other.shortCastlingRight[White] &&
+               shortCastlingRight[Black] == other.shortCastlingRight[Black] &&
+               longCastlingRight[White] == other.longCastlingRight[White] &&
+               longCastlingRight[Black] == other.longCastlingRight[Black];
     }
     bool operator!=(const Board& other) const {
         return !(*this == other);
@@ -206,7 +198,7 @@ struct Board {
             blackRooks = BR_START;
             blackQueens = BQ_START;
             blackKing = BK_START;
-            enPassant = 0;
+            enPassant = -1;
         } else {
             whitePawns = 0;
             whiteKnights = 0;
@@ -220,7 +212,7 @@ struct Board {
             blackRooks = 0;
             blackQueens = 0;
             blackKing = 0;
-            enPassant = 0;
+            enPassant = -1;
         }
     }
 };

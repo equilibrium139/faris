@@ -1,6 +1,11 @@
+#pragma once 
 #include "board.h"
+#include "movegen.h"
 
 void PrettyPrint(Bitboard bb);
 void PrettyPrint(const Board& board);
 Piece PieceAt(int squareIndex, const Board &board);
-void RemovePiece(int squareIndex, Board& board, Color colorToRemove);
+PieceType RemovePiece(Square square, Board& board, Color color);
+
+void MakeMove(const Move& move, Board& board, Color colorToMove);
+void UndoMove(const Move& move, Board& board, Color colorToMove);

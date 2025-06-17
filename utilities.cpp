@@ -1,4 +1,5 @@
 #include "utilities.h"
+#include "board.h"
 #include <iostream>
 
 void PrettyPrint(Bitboard bb) {
@@ -46,25 +47,93 @@ Piece PieceAt(int squareIndex, const Board &board) {
     return {PieceType::None};
 }
 
-// TODO: use uint8_t for squareIndex
-// TODO: move to Board, or move all these low-level methods that operate on Board to a different file
-static void RemovePiece(int squareIndex, std::span<Bitboard, 6> pieces) {
-    assert(squareIndex >= 0 && squareIndex < 64);
-    Bitboard captureSquareBB = (Bitboard)1 << squareIndex;
-    for (Bitboard& pieceBoard : pieces) {
-        if (pieceBoard & captureSquareBB) {
-            pieceBoard &= ~captureSquareBB;
-            return;
+PieceType PieceTypeAt(Square square, const Board& board, Color color) {
+    Bitboard squareBB = ToBitboard(square);
+    for (int i = 0; i < 6; i++) {
+        if (squareBB & board.bitboards2D[color][i]) {
+            return PieceType(i);
         }
     }
+    return PieceType::None;
 }
 
+// TODO: move to Board, or move all these low-level methods that operate on Board to a different file
+PieceType RemovePiece(Square square, Board& board, Color color) {
+    Bitboard squareBB = ToBitboard(square);
+    PieceType removedPieceType = PieceType::None;
+    for (int i = 0; i < 6; i++) {
+        if (squareBB & board.bitboards2D[color][i]) {
+            board.bitboards2D[color][i] &= ~squareBB;
+            removedPieceType = PieceType(i);
+            break;
+        }
+    }
+    assert(removedPieceType != PieceType::None);
+    return removedPieceType;
+}
 
-void RemovePiece(int squareIndex, Board& board, Color colorToRemove) {
-    assert(squareIndex >= 0 && squareIndex < 64);
-    RemovePiece(squareIndex, board.Bitboards(colorToRemove));
-    board.whiteKingsideCastlingRight = board.whiteKingsideCastlingRight && squareIndex != 7;
-    board.whiteQueensideCastlingRight = board.whiteQueensideCastlingRight && squareIndex != 0;
-    board.blackKingsideCastlingRight = board.blackKingsideCastlingRight && squareIndex != 63;
-    board.blackQueensideCastlingRight = board.blackQueensideCastlingRight && squareIndex != 56;
+void MakeMove(const Move &move, Board &board, Color moveColor) {
+    board.Move(move.type, moveColor, move.from, move.to);
+    Color oppColor = ToggleColor(moveColor);
+    Bitboard toBB = ToBitboard(move.to);
+    if (move.capturedPieceType != PieceType::None) {
+        if (board.enPassant && move.to == board.enPassant) {
+            assert(move.capturedPieceType == PieceType::Pawn);
+            constexpr int enPassantOffset[2] = { -8, 8 };
+            Square epPawnSquare = move.to + enPassantOffset[moveColor];
+            board.bitboards2D[oppColor][(int)move.capturedPieceType] &= ~ToBitboard(epPawnSquare);
+        }
+        else {
+            board.bitboards2D[oppColor][(int)move.capturedPieceType] &= ~toBB;
+        }
+    }
+    if (move.promotionType != PieceType::None) {
+        board.PromotePawn(move.promotionType, moveColor, move.to);
+    }
+    if (move.type == PieceType::King && move.from == STARTING_KING_SQUARE[moveColor] ) {
+        if (move.to == move.from + 2) { // short castle
+            board.Move(PieceType::Rook, moveColor, move.from + 3, move.from + 1);
+        }
+        else if (move.to == move.from - 2) { // long castle
+            board.Move(PieceType::Rook, moveColor, move.from - 4, move.from - 1);
+        }
+    }
+    board.enPassant += move.enPassantDelta;
+    board.shortCastlingRight[moveColor] = board.shortCastlingRight[moveColor] && !(move.flags & Move::RemovesShortCastlingRight);
+    board.longCastlingRight[moveColor] = board.longCastlingRight[moveColor] && !(move.flags & Move::RemovesLongCastlingRight);
+    board.shortCastlingRight[oppColor] = board.shortCastlingRight[oppColor] && !(move.flags & Move::RemovesOppShortCastlingRight);
+    board.longCastlingRight[oppColor] = board.longCastlingRight[oppColor] && !(move.flags & Move::RemovesOppLongCastlingRight);
+}
+
+void UndoMove(const Move &move, Board &board, Color moveColor) {
+    board.Move(move.type, moveColor, move.to, move.from);
+    Bitboard toBB = ToBitboard(move.to);
+    Color oppColor = ToggleColor(moveColor);
+    Square originalEPSquare = board.enPassant - move.enPassantDelta;
+    // TODO: handle enPassant capture properly
+    if (move.capturedPieceType != PieceType::None) {
+        if (move.to == originalEPSquare) {
+            constexpr int enPassantOffset[2] = { -8, 8 };
+            board.bitboards2D[oppColor][(int)move.capturedPieceType] |= ToBitboard(move.to + enPassantOffset[moveColor]);
+        }
+        else {
+            board.bitboards2D[oppColor][(int)move.capturedPieceType] |= toBB;
+        }
+    }
+    if (move.promotionType != PieceType::None) {
+        board.bitboards2D[moveColor][(int)move.promotionType] &= ~toBB;
+    }
+    if (move.type == PieceType::King && move.from == STARTING_KING_SQUARE[moveColor] ) {
+        if (move.to == move.from + 2) {
+            board.Move(PieceType::Rook, moveColor, move.from + 1, move.from + 3); 
+        }
+        else if (move.to == move.from - 2) {
+            board.Move(PieceType::Rook, moveColor, move.from - 1, move.from - 4);
+        }
+    }
+    board.enPassant = originalEPSquare;
+    board.shortCastlingRight[moveColor] = board.shortCastlingRight[moveColor] || (move.flags & Move::RemovesShortCastlingRight);
+    board.longCastlingRight[moveColor] = board.longCastlingRight[moveColor] || (move.flags & Move::RemovesLongCastlingRight);
+    board.shortCastlingRight[oppColor] = board.shortCastlingRight[oppColor] || (move.flags & Move::RemovesOppShortCastlingRight);
+    board.longCastlingRight[oppColor] = board.longCastlingRight[oppColor] || (move.flags & Move::RemovesOppLongCastlingRight);
 }

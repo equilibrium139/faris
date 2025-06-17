@@ -25,7 +25,7 @@ else()
 endif()
 
 add_subdirectory(tools/magic)
-add_executable(faris-engine attack_bitboards.cpp fen.cpp main.cpp movegen.cpp utilities.cpp)
+add_executable(faris-engine attack_bitboards.cpp fen.cpp main.cpp movegen.cpp perft.cpp utilities.cpp)
 add_dependencies(faris-engine generate_magic)
 
 include(FetchContent)
@@ -41,7 +41,7 @@ FetchContent_MakeAvailable(googletest)
 enable_testing()
 include(CTest)
 
-add_executable(faris-engine-tests attack_bitboards.cpp fen.cpp movegen.cpp tests/perft_divide.cpp utilities.cpp tests/perft_test_case.cpp tests/test_perft.cpp)
+add_executable(faris-engine-tests attack_bitboards.cpp fen.cpp movegen.cpp perft.cpp tests/perft_divide.cpp utilities.cpp tests/perft_test_case.cpp tests/test_perft.cpp)
 target_link_libraries(faris-engine-tests PRIVATE gtest_main)
 target_include_directories(faris-engine-tests PRIVATE ${CMAKE_CURRENT_SOURCE_DIR})
 
