@@ -15,10 +15,10 @@ static void printMoveWithCount(const Move& move, std::uint64_t count) {
 }
 
 std::uint64_t perftest(Board& board, int depth, Color colorToMove, bool enablePerftDiagnostics) {
-    if (depth == 0) {
-        return 1;
+    std::vector<Move> moves = GenMoves(board, colorToMove);
+    if (depth == 1) {
+        return moves.size();
     }
-    auto moves = GenMoves(board, colorToMove);
     std::uint64_t nodeCount = 0;
     Color nextColorToMove = ToggleColor(colorToMove);
     Board oldBoard = board;
