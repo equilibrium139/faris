@@ -25,7 +25,7 @@ else()
 endif()
 
 add_subdirectory(tools/magic)
-add_executable(faris-engine attack_bitboards.cpp fen.cpp main.cpp movegen.cpp perft.cpp utilities.cpp)
+add_executable(faris-engine attack_bitboards.cpp fen.cpp main.cpp movegen.cpp perft.cpp search.cpp utilities.cpp)
 add_dependencies(faris-engine generate_magic)
 
 include(FetchContent)
