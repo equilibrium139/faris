@@ -38,7 +38,7 @@ void PrintMove(const Move& move) {
 }
 
 int main(int argc, char** argv) {
-    maxDepth = 4;
+    maxDepth = 10;
     if (argc > 1) {
         maxDepth = std::atoi(argv[1]);
     }

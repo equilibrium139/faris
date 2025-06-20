@@ -20,25 +20,6 @@ int IncrementEnPassant() {
     return ++enPassant;
 }
 
-static bool underThreat(const Board &board, int squareIndex, Color threatColor) {
-    if (knightAttacks[squareIndex] & board.Knights(threatColor)) { return true; }
-    if (pawnAttacks[ToggleColor(threatColor)][squareIndex] & board.Pawns(threatColor)) { return true; }
-    if (kingAttacks[squareIndex] & board.Kings(threatColor)) { return true; } 
-
-    Bitboard enemyQueenBB = board.Queens(threatColor);
-    Bitboard enemyRookBB = board.Rooks(threatColor);
-    Bitboard occupancy = board.Occupancy();
-
-    Bitboard rookAttack = RookAttack(squareIndex, occupancy);
-    if (rookAttack & (enemyRookBB | enemyQueenBB)) { return true; }
-
-    Bitboard enemyBishopBB = board.Bishops(threatColor);
-    Bitboard bishopAttack = BishopAttack(squareIndex, occupancy);
-    if (bishopAttack & (enemyBishopBB | enemyQueenBB)) { return true; }
-
-    return false;
-}
-
 // TODO: make move arrays constexpr
 // TODO: change whiteTurn to color and don't hardcode 0/1 for black/white
 // TODO: use Square instead of int or other integer types

@@ -4,6 +4,7 @@
 #include "utilities.h"
 #include <bit>
 #include <cassert>
+#include <climits>
 #include <limits>
 #include <vector>
 
@@ -28,13 +29,12 @@ static int Evaluate(const Board& board, Color color) {
     return materialScore;
 }
 
-static int ScoreMove(Board& board, int depth, Color colorToMove, Color engineColor) {
+static int MinScoreMove(Board& board, int depth, Color colorToMove, Color engineColor, int& minScoreGuaranteed) {
     if (depth == 0) {
         return Evaluate(board, engineColor);
     }
 
     bool engineTurn = colorToMove == engineColor;
-    int bestScore = engineTurn ? std::numeric_limits<int>::min() : std::numeric_limits<int>::max();
     std::vector<Move> moves = GenMoves(board, colorToMove);
     // TODO: handle checkmate or stalemate.
     // If no moves available and it's engine turn, it might be a checkmate. If it is, score the move
@@ -44,19 +44,33 @@ static int ScoreMove(Board& board, int depth, Color colorToMove, Color engineCol
     // significantly, stalemate should be avoided. Otherwise, it might be worth scoring stalemate positively.
     // That will probably require quite a bit of tweaking. Or could just score a stalemate as 0 and if there are 
     // better moves they will be scored higher.
-    // if (moves.empty()) { 
-    //    
-    //}
+    if (moves.empty()) { 
+        if (InCheck(board, colorToMove)) { // checkmate
+            return engineTurn ? INT_MIN : INT_MAX;
+        }
+        else { // stalemate
+            return 0;
+        }
+    }
+    int bestScore = engineTurn ? INT_MIN : INT_MAX;
     for (const Move& move : moves) {
         MakeMove(move, board, colorToMove);
-        int score = ScoreMove(board, depth - 1, ToggleColor(colorToMove), engineColor);
+        int score = MinScoreMove(board, depth - 1, ToggleColor(colorToMove), engineColor, minScoreGuaranteed);
         if (engineTurn) { // maximize engine score when it's our turn
+            if (score > minScoreGuaranteed) {
+                minScoreGuaranteed = score;
+            }
             if (score > bestScore) {
                 bestScore = score;
             }
         }
-        else if (score < bestScore) { // minimize engine score when it's opponent turn (assume they will make the best move)
-            bestScore = score;
+        else {
+            if (score < minScoreGuaranteed) { // opponent can make a move that worsens our minimum score, stop considering this move
+                return score;
+            }
+            if (score < bestScore) {
+                bestScore = score;
+            }
         }
         UndoMove(move, board, colorToMove);
     }
@@ -68,11 +82,12 @@ Move Search(const Board& board, int maxDepth, Color colorToMove) {
     // TODO: also handle no moves available here
     std::vector<Move> moves = GenMoves(board, colorToMove);
     int bestScore = std::numeric_limits<int>::min();
+    int alpha = INT_MIN;
     const Move* bestMove = nullptr;
     Board boardCopy = board;
     for (const Move& move : moves) {
         MakeMove(move, boardCopy, colorToMove);
-        int score = ScoreMove(boardCopy, maxDepth - 1, ToggleColor(engineColor), engineColor);
+        int score = MinScoreMove(boardCopy, maxDepth - 1, ToggleColor(engineColor), engineColor, alpha);
         if (score > bestScore) {
             bestScore = score;
             bestMove = &move;

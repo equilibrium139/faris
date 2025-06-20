@@ -9,3 +9,5 @@ PieceType RemovePiece(Square square, Board& board, Color color);
 
 void MakeMove(const Move& move, Board& board, Color colorToMove);
 void UndoMove(const Move& move, Board& board, Color colorToMove);
+bool underThreat(const Board &board, int squareIndex, Color threatColor);
+bool InCheck(const Board& board, Color color);

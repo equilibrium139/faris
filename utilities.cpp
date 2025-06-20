@@ -1,4 +1,5 @@
 #include "utilities.h"
+#include "attack_bitboards.h"
 #include "board.h"
 #include <iostream>
 
@@ -136,4 +137,28 @@ void UndoMove(const Move &move, Board &board, Color moveColor) {
     board.longCastlingRight[moveColor] = board.longCastlingRight[moveColor] || (move.flags & Move::RemovesLongCastlingRight);
     board.shortCastlingRight[oppColor] = board.shortCastlingRight[oppColor] || (move.flags & Move::RemovesOppShortCastlingRight);
     board.longCastlingRight[oppColor] = board.longCastlingRight[oppColor] || (move.flags & Move::RemovesOppLongCastlingRight);
+}
+
+bool underThreat(const Board &board, int squareIndex, Color threatColor) {
+    if (knightAttacks[squareIndex] & board.Knights(threatColor)) { return true; }
+    if (pawnAttacks[ToggleColor(threatColor)][squareIndex] & board.Pawns(threatColor)) { return true; }
+    if (kingAttacks[squareIndex] & board.Kings(threatColor)) { return true; } 
+
+    Bitboard enemyQueenBB = board.Queens(threatColor);
+    Bitboard enemyRookBB = board.Rooks(threatColor);
+    Bitboard occupancy = board.Occupancy();
+
+    Bitboard rookAttack = RookAttack(squareIndex, occupancy);
+    if (rookAttack & (enemyRookBB | enemyQueenBB)) { return true; }
+
+    Bitboard enemyBishopBB = board.Bishops(threatColor);
+    Bitboard bishopAttack = BishopAttack(squareIndex, occupancy);
+    if (bishopAttack & (enemyBishopBB | enemyQueenBB)) { return true; }
+
+    return false;
+}
+
+bool InCheck(const Board& board, Color color) {
+    Square kingSquare = LSB(board.bitboards2D[color][KING_OFFSET]);
+    return underThreat(board, kingSquare, ToggleColor(color));
 }
