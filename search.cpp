@@ -2,11 +2,14 @@
 #include "board.h"
 #include "movegen.h"
 #include "utilities.h"
+#include <algorithm>
 #include <bit>
 #include <cassert>
 #include <climits>
 #include <limits>
 #include <vector>
+
+static constexpr int pieceValues[7] = {1, 3, 3, 5, 9, 200, 0};
 
 static int Evaluate(const Board& board, Color color) {
     int pawns = std::popcount(board.bitboards2D[color][PAWN_OFFSET]);
@@ -29,21 +32,13 @@ static int Evaluate(const Board& board, Color color) {
     return materialScore;
 }
 
-static int MinScoreMove(Board& board, int depth, Color colorToMove, Color engineColor, int& minScoreGuaranteed) {
+static int Minimax(Board& board, int depth, Color colorToMove, Color engineColor, int alpha, int beta) {
     if (depth == 0) {
         return Evaluate(board, engineColor);
     }
 
     bool engineTurn = colorToMove == engineColor;
     std::vector<Move> moves = GenMoves(board, colorToMove);
-    // TODO: handle checkmate or stalemate.
-    // If no moves available and it's engine turn, it might be a checkmate. If it is, score the move
-    // as negatively as possible. If it's a checkmate and it's opponent turn, score the move as highly
-    // as possible. 
-    // If it's a stalemate, things get a bit complicated because that may or may not be desired. If winning
-    // significantly, stalemate should be avoided. Otherwise, it might be worth scoring stalemate positively.
-    // That will probably require quite a bit of tweaking. Or could just score a stalemate as 0 and if there are 
-    // better moves they will be scored higher.
     if (moves.empty()) { 
         if (InCheck(board, colorToMove)) { // checkmate
             return engineTurn ? INT_MIN : INT_MAX;
@@ -52,45 +47,53 @@ static int MinScoreMove(Board& board, int depth, Color colorToMove, Color engine
             return 0;
         }
     }
+    std::sort(moves.begin(), moves.end(), [&](const Move& a, const Move& b) {
+        return pieceValues[(int)a.capturedPieceType] > pieceValues[(int)b.capturedPieceType];        
+    });
     int bestScore = engineTurn ? INT_MIN : INT_MAX;
     for (const Move& move : moves) {
         MakeMove(move, board, colorToMove);
-        int score = MinScoreMove(board, depth - 1, ToggleColor(colorToMove), engineColor, minScoreGuaranteed);
-        if (engineTurn) { // maximize engine score when it's our turn
-            if (score > minScoreGuaranteed) {
-                minScoreGuaranteed = score;
-            }
-            if (score > bestScore) {
-                bestScore = score;
+        int score = Minimax(board, depth - 1, ToggleColor(colorToMove), engineColor, alpha, beta);
+        UndoMove(move, board, colorToMove);
+        if (engineTurn) { 
+            bestScore = std::max(score, bestScore);
+            alpha = std::max(alpha, bestScore);
+            if (beta <= alpha) {
+                break;
             }
         }
         else {
-            if (score < minScoreGuaranteed) { // opponent can make a move that worsens our minimum score, stop considering this move
-                return score;
-            }
-            if (score < bestScore) {
-                bestScore = score;
+            bestScore = std::min(score, bestScore);
+            beta = std::min(beta, bestScore);
+            if (beta <= alpha) {
+                break;
             }
         }
-        UndoMove(move, board, colorToMove);
     }
     return bestScore;
 }
 
 Move Search(const Board& board, int maxDepth, Color colorToMove) {
     Color engineColor = colorToMove;
-    // TODO: also handle no moves available here
     std::vector<Move> moves = GenMoves(board, colorToMove);
-    int bestScore = std::numeric_limits<int>::min();
+    if (moves.empty()) {
+        return Move{};
+    }
+    std::sort(moves.begin(), moves.end(), [&](const Move& a, const Move& b) {
+        return pieceValues[(int)a.capturedPieceType] > pieceValues[(int)b.capturedPieceType];        
+    });
+    int bestScore = INT_MIN;
     int alpha = INT_MIN;
-    const Move* bestMove = nullptr;
+    int beta = INT_MAX;
+    const Move* bestMove = &moves[0];
     Board boardCopy = board;
     for (const Move& move : moves) {
         MakeMove(move, boardCopy, colorToMove);
-        int score = MinScoreMove(boardCopy, maxDepth - 1, ToggleColor(engineColor), engineColor, alpha);
+        int score = Minimax(boardCopy, maxDepth - 1, ToggleColor(engineColor), engineColor, alpha, beta);
         if (score > bestScore) {
             bestScore = score;
             bestMove = &move;
+            alpha = std::max(alpha, bestScore);
         }
         UndoMove(move, boardCopy, colorToMove);
     }
