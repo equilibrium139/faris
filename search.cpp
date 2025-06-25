@@ -6,30 +6,91 @@
 #include <bit>
 #include <cassert>
 #include <climits>
-#include <limits>
 #include <vector>
 
-static constexpr int pieceValues[7] = {1, 3, 3, 5, 9, 200, 0};
+static constexpr int pieceValues[7] = {100, 300, 300, 500, 900, 2000, 0};
+
+static int DoubledPawns(Bitboard pawns) {
+    int doubled = 0;
+    while (pawns) {
+        Square pawn = PopLSB(pawns);
+        int file = pawn & 0x7;
+        if (pawns & FILE_MASK[file]) {
+            doubled++;
+        }
+    }
+    return doubled;
+}
+
+static int BlockedPawns(Bitboard pawns, Bitboard occupancy, Color color) {
+    constexpr int direction[2] = { 8, -8 };
+    int blocked = 0;
+    while (pawns) {
+        Square pawn = PopLSB(pawns);
+        Square oneForward = pawn + direction[color];
+        if (occupancy & ToBitboard(oneForward)) {
+            blocked++;
+        }
+    }
+    return blocked;
+}
+
+static int IsolatedPawns(Bitboard pawns, Color color) {
+    static constexpr Bitboard neighborFiles[8] = {
+        FILE_MASK[1],
+        FILE_MASK[0] | FILE_MASK[2],
+        FILE_MASK[1] | FILE_MASK[3],
+        FILE_MASK[2] | FILE_MASK[4],
+        FILE_MASK[3] | FILE_MASK[5],
+        FILE_MASK[4] | FILE_MASK[6],
+        FILE_MASK[5] | FILE_MASK[7],
+        FILE_MASK[6]
+    };
+    int isolated = 0;
+    while (pawns) {
+        Square pawn = PopLSB(pawns);
+        int file = pawn & 0x7;
+        if ((pawns & neighborFiles[file]) == 0) {
+            isolated++;
+        }
+    }
+    return isolated;
+}
 
 static int Evaluate(const Board& board, Color color) {
-    int pawns = std::popcount(board.bitboards2D[color][PAWN_OFFSET]);
-    int knights = std::popcount(board.bitboards2D[color][KNIGHT_OFFSET]);
-    int bishops = std::popcount(board.bitboards2D[color][BISHOP_OFFSET]);
-    int rooks = std::popcount(board.bitboards2D[color][ROOK_OFFSET]);
-    int queens = std::popcount(board.bitboards2D[color][QUEEN_OFFSET]);
+    Bitboard pawnBB = board.bitboards2D[color][PAWN_OFFSET];
+    int pawnCount = std::popcount(pawnBB);
+    int knightCount = std::popcount(board.bitboards2D[color][KNIGHT_OFFSET]);
+    int bishopCount = std::popcount(board.bitboards2D[color][BISHOP_OFFSET]);
+    int rookCount = std::popcount(board.bitboards2D[color][ROOK_OFFSET]);
+    int queenCount = std::popcount(board.bitboards2D[color][QUEEN_OFFSET]);
 
     Color oppColor = ToggleColor(color);
-    int oppPawns = std::popcount(board.bitboards2D[oppColor][PAWN_OFFSET]);
-    int oppKnights = std::popcount(board.bitboards2D[oppColor][KNIGHT_OFFSET]);
-    int oppBishops = std::popcount(board.bitboards2D[oppColor][BISHOP_OFFSET]);
-    int oppRooks = std::popcount(board.bitboards2D[oppColor][ROOK_OFFSET]);
-    int oppQueens = std::popcount(board.bitboards2D[oppColor][QUEEN_OFFSET]);
+    Bitboard oppPawnBB = board.bitboards2D[oppColor][PAWN_OFFSET];
+    int oppPawnCount = std::popcount(oppPawnBB);
+    int oppKnightCount = std::popcount(board.bitboards2D[oppColor][KNIGHT_OFFSET]);
+    int oppBishopCount = std::popcount(board.bitboards2D[oppColor][BISHOP_OFFSET]);
+    int oppRookCount = std::popcount(board.bitboards2D[oppColor][ROOK_OFFSET]);
+    int oppQueenCount = std::popcount(board.bitboards2D[oppColor][QUEEN_OFFSET]);
 
-    int materialScore = 1 * (pawns - oppPawns) +
-                        3 * (bishops - oppBishops + knights - oppKnights) +
-                        5 * (rooks - oppRooks) +
-                        9 * (queens - oppQueens);
-    return materialScore;
+    int materialScore = pieceValues[PAWN_OFFSET] * (pawnCount - oppPawnCount) +
+                        pieceValues[BISHOP_OFFSET] * (bishopCount - oppBishopCount + knightCount - oppKnightCount) +
+                        pieceValues[ROOK_OFFSET] * (rookCount - oppRookCount) +
+                        pieceValues[QUEEN_OFFSET] * (queenCount - oppQueenCount);
+
+    Bitboard occupancy = board.Occupancy();
+    int doubled = DoubledPawns(pawnBB);
+    int oppDoubled = DoubledPawns(oppDoubled);
+    int blocked = BlockedPawns(pawnBB, occupancy, color);
+    int oppBlocked = BlockedPawns(oppPawnBB, occupancy, oppColor);
+    int isolated = IsolatedPawns(pawnBB, color);
+    int oppIsolated = IsolatedPawns(oppPawnBB, oppColor);
+    
+    // TODO: could compute mobility for sliding pieces and knights by bitwise ANDing the attack board with inverse friendly occupancy
+    // might be expensive
+    int mobilityScore = -50 * (doubled - oppDoubled + blocked - oppBlocked + isolated - oppIsolated);
+    
+    return materialScore + mobilityScore;
 }
 
 static int Minimax(Board& board, int depth, Color colorToMove, Color engineColor, int alpha, int beta) {
