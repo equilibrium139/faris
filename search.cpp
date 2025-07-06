@@ -8,6 +8,74 @@
 #include <climits>
 #include <vector>
 
+// All of these scores from POV of white. Square XOR 56 to get score from black POV
+
+static constexpr std::array<int, 64> pawnScoreTable = {
+      0,   0,   0,   0,   0,   0,   0,   0,
+      5,  10,  10, -20, -20,  10,  10,   5,
+      5,  -5, -10,   0,   0, -10,  -5,   5,
+      0,   0,   0,  20,  20,   0,   0,   0,
+      5,   5,  10,  25,  25,  10,   5,   5,
+     10,  10,  20,  30,  30,  20,  10,  10,
+     50,  50,  50,  50,  50,  50,  50,  50,
+      0,   0,   0,   0,   0,   0,   0,   0
+};
+
+static constexpr std::array<int, 64> knightScoreTable = {
+    -50, -40, -30, -30, -30, -30, -40, -50,
+    -40, -20,   0,   5,   5,   0, -20, -40,
+    -30,   5,  10,  15,  15,  10,   5, -30,
+    -30,   0,  15,  20,  20,  15,   0, -30,
+    -30,   5,  15,  20,  20,  15,   5, -30,
+    -30,   0,  10,  15,  15,  10,   0, -30,
+    -40, -20,   0,   0,   0,   0, -20, -40,
+    -50, -40, -30, -30, -30, -30, -40, -50
+};
+
+static constexpr std::array<int, 64> bishopScoreTable = {
+    -20, -10, -10, -10, -10, -10, -10, -20,
+    -10,   5,   0,   0,   0,   0,   5, -10,
+    -10,  10,  10,  10,  10,  10,  10, -10,
+    -10,   0,  10,  10,  10,  10,   0, -10,
+    -10,   5,   5,  10,  10,   5,   5, -10,
+    -10,   0,   5,  10,  10,   5,   0, -10,
+    -10,   0,   0,   0,   0,   0,   0, -10,
+    -20, -10, -10, -10, -10, -10, -10, -20
+};
+
+static constexpr std::array<int, 64> rookScoreTable = {
+      0,   0,   0,   5,   5,   0,   0,   0,
+     -5,   0,   0,   0,   0,   0,   0,  -5,
+     -5,   0,   0,   0,   0,   0,   0,  -5,
+     -5,   0,   0,   0,   0,   0,   0,  -5,
+     -5,   0,   0,   0,   0,   0,   0,  -5,
+     -5,   0,   0,   0,   0,   0,   0,  -5,
+      5,  10,  10,  10,  10,  10,  10,   5,
+      0,   0,   0,   0,   0,   0,   0,   0
+};
+
+static constexpr std::array<int, 64> queenScoreTable = {
+    -20, -10, -10,  -5,  -5, -10, -10, -20,
+    -10,   0,   5,   0,   0,   0,   0, -10,
+    -10,   5,   5,   5,   5,   5,   0, -10,
+      0,   0,   5,   5,   5,   5,   0,  -5,
+     -5,   0,   5,   5,   5,   5,   0,  -5,
+    -10,   0,   5,   5,   5,   5,   0, -10,
+    -10,   0,   0,   0,   0,   0,   0, -10,
+    -20, -10, -10,  -5,  -5, -10, -10, -20
+};
+
+static constexpr std::array<int, 64> kingScoreTable = {
+     20,  30,  10,   0,   0,  10,  30,  20,
+     20,  20,   0,   0,   0,   0,  20,  20,
+    -10, -20, -20, -20, -20, -20, -20, -10,
+    -20, -30, -30, -40, -40, -30, -30, -20,
+    -30, -40, -40, -50, -50, -40, -40, -30,
+    -30, -40, -40, -50, -50, -40, -40, -30,
+    -30, -40, -40, -50, -50, -40, -40, -30,
+    -30, -40, -40, -50, -50, -40, -40, -30
+};
+
 static constexpr int pieceValues[7] = {100, 300, 300, 500, 900, 2000, 0};
 
 static int DoubledPawns(Bitboard pawns) {
@@ -57,24 +125,43 @@ static int IsolatedPawns(Bitboard pawns, Color color) {
     return isolated;
 }
 
+static int ComputePositionalScore(Bitboard bb, const std::array<int, 64>& scoreTable, bool black = false) {
+    int score = 0;
+    while (bb) {
+        Square square = PopLSB(bb);
+        square ^= black * 56;
+        score += scoreTable[square];
+    }
+    return score;
+}
+
 static int Evaluate(const Board& board, Color color) {
     Bitboard pawnBB = board.bitboards2D[color][PAWN_OFFSET];
+    Bitboard knightBB = board.bitboards2D[color][KNIGHT_OFFSET];
+    Bitboard bishopBB = board.bitboards2D[color][BISHOP_OFFSET];
+    Bitboard rookBB = board.bitboards2D[color][ROOK_OFFSET];
+    Bitboard queenBB = board.bitboards2D[color][QUEEN_OFFSET];
     int pawnCount = std::popcount(pawnBB);
-    int knightCount = std::popcount(board.bitboards2D[color][KNIGHT_OFFSET]);
-    int bishopCount = std::popcount(board.bitboards2D[color][BISHOP_OFFSET]);
-    int rookCount = std::popcount(board.bitboards2D[color][ROOK_OFFSET]);
-    int queenCount = std::popcount(board.bitboards2D[color][QUEEN_OFFSET]);
+    int knightCount = std::popcount(knightBB);
+    int bishopCount = std::popcount(bishopBB);
+    int rookCount = std::popcount(rookBB);
+    int queenCount = std::popcount(queenBB);
 
     Color oppColor = ToggleColor(color);
     Bitboard oppPawnBB = board.bitboards2D[oppColor][PAWN_OFFSET];
+    Bitboard oppKnightBB = board.bitboards2D[oppColor][KNIGHT_OFFSET];
+    Bitboard oppBishopBB = board.bitboards2D[oppColor][BISHOP_OFFSET];
+    Bitboard oppRookBB = board.bitboards2D[oppColor][ROOK_OFFSET];
+    Bitboard oppQueenBB = board.bitboards2D[oppColor][QUEEN_OFFSET];
     int oppPawnCount = std::popcount(oppPawnBB);
-    int oppKnightCount = std::popcount(board.bitboards2D[oppColor][KNIGHT_OFFSET]);
-    int oppBishopCount = std::popcount(board.bitboards2D[oppColor][BISHOP_OFFSET]);
-    int oppRookCount = std::popcount(board.bitboards2D[oppColor][ROOK_OFFSET]);
-    int oppQueenCount = std::popcount(board.bitboards2D[oppColor][QUEEN_OFFSET]);
+    int oppKnightCount = std::popcount(oppKnightBB);
+    int oppBishopCount = std::popcount(oppBishopBB);
+    int oppRookCount = std::popcount(oppRookBB);
+    int oppQueenCount = std::popcount(oppQueenBB);
 
     int materialScore = pieceValues[PAWN_OFFSET] * (pawnCount - oppPawnCount) +
-                        pieceValues[BISHOP_OFFSET] * (bishopCount - oppBishopCount + knightCount - oppKnightCount) +
+                        pieceValues[KNIGHT_OFFSET] * (knightCount - oppKnightCount) + 
+                        pieceValues[BISHOP_OFFSET] * (bishopCount - oppBishopCount) +
                         pieceValues[ROOK_OFFSET] * (rookCount - oppRookCount) +
                         pieceValues[QUEEN_OFFSET] * (queenCount - oppQueenCount);
 
@@ -88,9 +175,51 @@ static int Evaluate(const Board& board, Color color) {
     
     // TODO: could compute mobility for sliding pieces and knights by bitwise ANDing the attack board with inverse friendly occupancy
     // might be expensive
-    int mobilityScore = -50 * (doubled - oppDoubled + blocked - oppBlocked + isolated - oppIsolated);
+    int pawnStructureScore = -50 * (doubled - oppDoubled + blocked - oppBlocked + isolated - oppIsolated);
     
-    return materialScore + mobilityScore;
+    bool black = color == Black;
+    int pawnPosScore = ComputePositionalScore(pawnBB, pawnScoreTable, black);
+    int knightPosScore = ComputePositionalScore(knightBB, knightScoreTable, black);
+    int bishopPosScore = ComputePositionalScore(bishopBB, bishopScoreTable, black);
+    int rookPosScore = ComputePositionalScore(rookBB, rookScoreTable, black);
+    int queenPosScore = ComputePositionalScore(queenBB, queenScoreTable, black);
+
+    int oppPawnPosScore = ComputePositionalScore(oppPawnBB, pawnScoreTable, !black);
+    int oppKnightPosScore = ComputePositionalScore(oppKnightBB, knightScoreTable, !black);
+    int oppBishopPosScore = ComputePositionalScore(oppBishopBB, bishopScoreTable, !black);
+    int oppRookPosScore = ComputePositionalScore(oppRookBB, rookScoreTable, !black);
+    int oppQueenPosScore = ComputePositionalScore(oppQueenBB, queenScoreTable, !black);
+
+    int positionalScore = pawnPosScore - oppPawnPosScore + knightPosScore - oppKnightPosScore + bishopPosScore - oppBishopPosScore + 
+                          rookPosScore - oppRookPosScore + queenPosScore - oppQueenPosScore;
+
+    return materialScore + pawnStructureScore + positionalScore;
+}
+
+// Move killerMoves[10][2] = {};
+
+static int ScoreMove(const Move& move, int depth) {
+    int value = 0;
+    if (move.capturedPieceType != PieceType::None) {
+        return 10000 + pieceValues[(int)move.capturedPieceType] - pieceValues[(int)move.type];
+    }
+    if (move.promotionType != PieceType::None) {
+        return 10000 + pieceValues[(int)move.promotionType];
+    }
+    // if (move == killerMoves[depth][0]) {
+    //     return 9000;
+    // }
+    // if (move == killerMoves[depth][1]) {
+    //     return 8000;
+    // }
+    return 0;
+}
+
+
+static bool MoveComparator(const Move& a, const Move& b, int depth) {
+    int aScore = ScoreMove(a, depth);
+    int bScore = ScoreMove(b, depth);
+    return aScore > bScore;
 }
 
 static int Minimax(Board& board, int depth, Color colorToMove, Color engineColor, int alpha, int beta) {
@@ -102,15 +231,13 @@ static int Minimax(Board& board, int depth, Color colorToMove, Color engineColor
     std::vector<Move> moves = GenMoves(board, colorToMove);
     if (moves.empty()) { 
         if (InCheck(board, colorToMove)) { // checkmate
-            return engineTurn ? INT_MIN : INT_MAX;
+            return engineTurn ? -1000000 - depth : 1000000 + depth;
         }
         else { // stalemate
             return 0;
         }
     }
-    std::sort(moves.begin(), moves.end(), [&](const Move& a, const Move& b) {
-        return pieceValues[(int)a.capturedPieceType] > pieceValues[(int)b.capturedPieceType];        
-    });
+    std::sort(moves.begin(), moves.end(), [&](const Move& a, const Move& b){ return MoveComparator(a, b, depth); });
     int bestScore = engineTurn ? INT_MIN : INT_MAX;
     for (const Move& move : moves) {
         MakeMove(move, board, colorToMove);
@@ -120,6 +247,10 @@ static int Minimax(Board& board, int depth, Color colorToMove, Color engineColor
             bestScore = std::max(score, bestScore);
             alpha = std::max(alpha, bestScore);
             if (beta <= alpha) {
+                // if (move.capturedPieceType == PieceType::None) {
+                    // killerMoves[depth][1] = killerMoves[depth][0];
+                    // killerMoves[depth][0] = move;
+                // }
                 break;
             }
         }
@@ -127,6 +258,10 @@ static int Minimax(Board& board, int depth, Color colorToMove, Color engineColor
             bestScore = std::min(score, bestScore);
             beta = std::min(beta, bestScore);
             if (beta <= alpha) {
+                // if (move.capturedPieceType == PieceType::None) {
+                //     killerMoves[depth][1] = killerMoves[depth][0];
+                //     killerMoves[depth][0] = move;
+                // }
                 break;
             }
         }
@@ -140,9 +275,7 @@ Move Search(const Board& board, int maxDepth, Color colorToMove) {
     if (moves.empty()) {
         return Move{};
     }
-    std::sort(moves.begin(), moves.end(), [&](const Move& a, const Move& b) {
-        return pieceValues[(int)a.capturedPieceType] > pieceValues[(int)b.capturedPieceType];        
-    });
+    std::sort(moves.begin(), moves.end(), [&](const Move& a, const Move& b){ return MoveComparator(a, b, maxDepth); });
     int bestScore = INT_MIN;
     int alpha = INT_MIN;
     int beta = INT_MAX;
