@@ -18,6 +18,11 @@ struct Move {
     PieceType promotionType = PieceType::None;
     std::int8_t enPassantDelta = 0;
     CastlingFlags flags = None; 
+    // used for killer move comparison so doesn't check all members. Should probably not use equality operator tbh
+    bool operator==(const Move& other) const {
+        return from == other.from && to == other.to && promotionType == other.promotionType;
+        // return from == other.from && to == other.to && type == other.type && capturedPieceType == other.capturedPieceType;
+    }
 };
 
 inline Move::CastlingFlags operator|(Move::CastlingFlags lhs, Move::CastlingFlags rhs) {

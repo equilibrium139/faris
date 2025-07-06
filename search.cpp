@@ -6,6 +6,8 @@
 #include <bit>
 #include <cassert>
 #include <climits>
+#include <cstring>
+#include <utility>
 #include <vector>
 
 // All of these scores from POV of white. Square XOR 56 to get score from black POV
@@ -196,7 +198,7 @@ static int Evaluate(const Board& board, Color color) {
     return materialScore + pawnStructureScore + positionalScore;
 }
 
-// Move killerMoves[10][2] = {};
+Move killerMoves[64][2] = {};
 
 static int ScoreMove(const Move& move, int depth) {
     int value = 0;
@@ -206,12 +208,12 @@ static int ScoreMove(const Move& move, int depth) {
     if (move.promotionType != PieceType::None) {
         return 10000 + pieceValues[(int)move.promotionType];
     }
-    // if (move == killerMoves[depth][0]) {
-    //     return 9000;
-    // }
-    // if (move == killerMoves[depth][1]) {
-    //     return 8000;
-    // }
+    if (move == killerMoves[depth][0]) {
+        return 9000;
+    }
+    if (move == killerMoves[depth][1]) {
+        return 8000;
+    }
     return 0;
 }
 
@@ -247,10 +249,10 @@ static int Minimax(Board& board, int depth, Color colorToMove, Color engineColor
             bestScore = std::max(score, bestScore);
             alpha = std::max(alpha, bestScore);
             if (beta <= alpha) {
-                // if (move.capturedPieceType == PieceType::None) {
-                    // killerMoves[depth][1] = killerMoves[depth][0];
-                    // killerMoves[depth][0] = move;
-                // }
+                if (move.capturedPieceType == PieceType::None) {
+                    killerMoves[depth][1] = killerMoves[depth][0];
+                    killerMoves[depth][0] = move;
+                }
                 break;
             }
         }
@@ -258,10 +260,10 @@ static int Minimax(Board& board, int depth, Color colorToMove, Color engineColor
             bestScore = std::min(score, bestScore);
             beta = std::min(beta, bestScore);
             if (beta <= alpha) {
-                // if (move.capturedPieceType == PieceType::None) {
-                //     killerMoves[depth][1] = killerMoves[depth][0];
-                //     killerMoves[depth][0] = move;
-                // }
+                if (move.capturedPieceType == PieceType::None) {
+                    killerMoves[depth][1] = killerMoves[depth][0];
+                    killerMoves[depth][0] = move;
+                }
                 break;
             }
         }
@@ -270,26 +272,30 @@ static int Minimax(Board& board, int depth, Color colorToMove, Color engineColor
 }
 
 Move Search(const Board& board, int maxDepth, Color colorToMove) {
+    std::memset(killerMoves, 0, sizeof(killerMoves));
     Color engineColor = colorToMove;
     std::vector<Move> moves = GenMoves(board, colorToMove);
     if (moves.empty()) {
         return Move{};
     }
-    std::sort(moves.begin(), moves.end(), [&](const Move& a, const Move& b){ return MoveComparator(a, b, maxDepth); });
-    int bestScore = INT_MIN;
-    int alpha = INT_MIN;
-    int beta = INT_MAX;
-    const Move* bestMove = &moves[0];
     Board boardCopy = board;
-    for (const Move& move : moves) {
-        MakeMove(move, boardCopy, colorToMove);
-        int score = Minimax(boardCopy, maxDepth - 1, ToggleColor(engineColor), engineColor, alpha, beta);
-        if (score > bestScore) {
-            bestScore = score;
-            bestMove = &move;
-            alpha = std::max(alpha, bestScore);
+    std::sort(moves.begin(), moves.end(), [&](const Move& a, const Move& b){ return MoveComparator(a, b, maxDepth); });
+    Move* bestMove = &moves[0];
+    for (int depth = 1; depth <= maxDepth; depth++) {
+        int bestScore = INT_MIN;
+        int alpha = INT_MIN;
+        int beta = INT_MAX;
+        for (Move& move : moves) {
+            MakeMove(move, boardCopy, colorToMove);
+            int score = Minimax(boardCopy, depth - 1, ToggleColor(engineColor), engineColor, alpha, beta);
+            if (score > bestScore) {
+                bestScore = score;
+                bestMove = &move;
+                alpha = std::max(alpha, bestScore);
+            }
+            UndoMove(move, boardCopy, colorToMove);
         }
-        UndoMove(move, boardCopy, colorToMove);
+        std::swap(*bestMove, moves[0]); 
     }
     return *bestMove;
 }
