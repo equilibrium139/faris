@@ -86,8 +86,10 @@ void ProcessInput() {
             assert(token == "binc");
             ss >> state.binc;
             */
+            ss >> token;
+            int depth = std::stoi(token);
             std::cout << "Computing...\n";
-            Move move = Search(state.board, 10, state.colorToMove);
+            Move move = Search(state.board, depth, state.colorToMove);
             std::cout << "Best move: " <<  MoveToUCINotation(move) << std::endl;
         }
         else if (token == "uci") {

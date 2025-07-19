@@ -1,6 +1,7 @@
 #include "utilities.h"
 #include "attack_bitboards.h"
 #include "board.h"
+#include "transposition.h"
 #include <iostream>
 
 void PrettyPrint(Bitboard bb) {
@@ -48,11 +49,11 @@ Piece PieceAt(int squareIndex, const Board &board) {
     return {PieceType::None};
 }
 
-PieceType PieceTypeAt(Square square, const Board& board, Color color) {
+PieceType PieceTypeAt(Square square, const Board& board) {
     Bitboard squareBB = ToBitboard(square);
-    for (int i = 0; i < 6; i++) {
-        if (squareBB & board.bitboards2D[color][i]) {
-            return PieceType(i);
+    for (int i = 0; i < COUNT_BITBOARDS; i++) {
+        if (squareBB & board.bitboards[i]) {
+            return i < 6 ? PieceType(i) : PieceType(i - 6);
         }
     }
     return PieceType::None;
@@ -106,16 +107,83 @@ void MakeMove(const Move &move, Board &board, Color moveColor) {
     board.longCastlingRight[oppColor] = board.longCastlingRight[oppColor] && !(move.flags & Move::RemovesOppLongCastlingRight);
 }
 
+void MakeMove(const Move &move, Board &board, Color moveColor, std::uint64_t& boardHash) {
+    boardHash ^= transpositionTable.blackToMoveZobrist; // color always toggled
+    boardHash ^= transpositionTable.pieceZobrist[move.from][(int)move.type][moveColor]; // remove moving piece from old square
+    if (board.enPassant != -1) {
+        boardHash ^= transpositionTable.enPassantFileZobrist[board.enPassant & 0x7];
+    }
+    Square newEPSquare = board.enPassant + move.enPassantDelta;
+    if (newEPSquare != -1) {
+        boardHash ^= transpositionTable.enPassantFileZobrist[newEPSquare & 0x7];
+    }
+    Color oppColor = ToggleColor(moveColor);
+
+    board.Move(move.type, moveColor, move.from, move.to);
+    Bitboard toBB = ToBitboard(move.to);
+    if (move.capturedPieceType != PieceType::None) {
+        if (move.type == PieceType::Pawn && board.enPassant != -1 && move.to == board.enPassant) {
+            assert(move.capturedPieceType == PieceType::Pawn);
+            constexpr int enPassantOffset[2] = { -8, 8 };
+            Square capturedPawnSquare = move.to + enPassantOffset[moveColor];
+            board.bitboards2D[oppColor][(int)move.capturedPieceType] &= ~ToBitboard(capturedPawnSquare);
+            boardHash ^= transpositionTable.pieceZobrist[capturedPawnSquare][(int)move.capturedPieceType][oppColor]; 
+        }
+        else {
+            board.bitboards2D[oppColor][(int)move.capturedPieceType] &= ~toBB;
+            boardHash ^= transpositionTable.pieceZobrist[move.to][(int)move.capturedPieceType][oppColor]; 
+        }
+    }
+    if (move.promotionType != PieceType::None) {
+        board.PromotePawn(move.promotionType, moveColor, move.to);
+        boardHash ^= transpositionTable.pieceZobrist[move.to][(int)move.promotionType][moveColor];
+    }
+    else {
+        boardHash ^= transpositionTable.pieceZobrist[move.to][(int)move.type][moveColor];
+    }
+    if (move.type == PieceType::King && move.from == STARTING_KING_SQUARE[moveColor] ) {
+        if (move.to == move.from + 2) { // short castle
+            board.Move(PieceType::Rook, moveColor, move.from + 3, move.from + 1);
+            boardHash ^= transpositionTable.pieceZobrist[move.from + 3][(int)PieceType::Rook][moveColor];
+            boardHash ^= transpositionTable.pieceZobrist[move.from + 1][(int)PieceType::Rook][moveColor];
+        }
+        else if (move.to == move.from - 2) { // long castle
+            board.Move(PieceType::Rook, moveColor, move.from - 4, move.from - 1);
+            boardHash ^= transpositionTable.pieceZobrist[move.from - 4][(int)PieceType::Rook][moveColor];
+            boardHash ^= transpositionTable.pieceZobrist[move.from - 1][(int)PieceType::Rook][moveColor];
+        }
+    }
+
+    unsigned int oldCastlingRightsIndex = ((unsigned int)(board.shortCastlingRight[White])) << 3 |
+                                          ((unsigned int)(board.shortCastlingRight[Black])) << 2 |
+                                          ((unsigned int)(board.longCastlingRight[White])) << 1 |
+                                          ((unsigned int)(board.longCastlingRight[Black])); 
+    boardHash ^= transpositionTable.castlingRightsZobrist[oldCastlingRightsIndex];
+
+    board.enPassant = newEPSquare;
+    board.shortCastlingRight[moveColor] = board.shortCastlingRight[moveColor] && !(move.flags & Move::RemovesShortCastlingRight);
+    board.longCastlingRight[moveColor] = board.longCastlingRight[moveColor] && !(move.flags & Move::RemovesLongCastlingRight);
+    board.shortCastlingRight[oppColor] = board.shortCastlingRight[oppColor] && !(move.flags & Move::RemovesOppShortCastlingRight);
+    board.longCastlingRight[oppColor] = board.longCastlingRight[oppColor] && !(move.flags & Move::RemovesOppLongCastlingRight);
+
+    unsigned int newCastlingRightsIndex = ((unsigned int)(board.shortCastlingRight[White])) << 3 |
+                                          ((unsigned int)(board.shortCastlingRight[Black])) << 2 |
+                                          ((unsigned int)(board.longCastlingRight[White])) << 1 |
+                                          ((unsigned int)(board.longCastlingRight[Black])); 
+    boardHash ^= transpositionTable.castlingRightsZobrist[newCastlingRightsIndex];
+}
+
 void UndoMove(const Move &move, Board &board, Color moveColor) {
+    Square originalEPSquare = board.enPassant - move.enPassantDelta;
     board.Move(move.type, moveColor, move.to, move.from);
     Bitboard toBB = ToBitboard(move.to);
     Color oppColor = ToggleColor(moveColor);
-    Square originalEPSquare = board.enPassant - move.enPassantDelta;
     // TODO: handle enPassant capture properly
     if (move.capturedPieceType != PieceType::None) {
-        if (move.to == originalEPSquare) {
+        if (move.type == PieceType::Pawn && move.to == originalEPSquare) {
             constexpr int enPassantOffset[2] = { -8, 8 };
-            board.bitboards2D[oppColor][(int)move.capturedPieceType] |= ToBitboard(move.to + enPassantOffset[moveColor]);
+            Square capturedPawnSquare = move.to + enPassantOffset[moveColor];
+            board.bitboards2D[oppColor][(int)move.capturedPieceType] |= ToBitboard(capturedPawnSquare);
         }
         else {
             board.bitboards2D[oppColor][(int)move.capturedPieceType] |= toBB;
@@ -132,7 +200,9 @@ void UndoMove(const Move &move, Board &board, Color moveColor) {
             board.Move(PieceType::Rook, moveColor, move.from - 1, move.from - 4);
         }
     }
+
     board.enPassant = originalEPSquare;
+    
     board.shortCastlingRight[moveColor] = board.shortCastlingRight[moveColor] || (move.flags & Move::RemovesShortCastlingRight);
     board.longCastlingRight[moveColor] = board.longCastlingRight[moveColor] || (move.flags & Move::RemovesLongCastlingRight);
     board.shortCastlingRight[oppColor] = board.shortCastlingRight[oppColor] || (move.flags & Move::RemovesOppShortCastlingRight);

@@ -1,6 +1,7 @@
 #include "search.h"
 #include "board.h"
 #include "movegen.h"
+#include "transposition.h"
 #include "utilities.h"
 #include <algorithm>
 #include <bit>
@@ -224,12 +225,28 @@ static bool MoveComparator(const Move& a, const Move& b, int depth) {
     return aScore > bScore;
 }
 
-static int Minimax(Board& board, int depth, Color colorToMove, Color engineColor, int alpha, int beta) {
+static int Minimax(Board& board, int depth, Color colorToMove, Color engineColor, int alpha, int beta, const std::uint64_t boardHash) {
     if (depth == 0) {
         return Evaluate(board, engineColor);
     }
-
     bool engineTurn = colorToMove == engineColor;
+    const TTEntry* entry = transpositionTable.Search(board, colorToMove, boardHash);
+    if (entry && entry->depth >= depth) {
+        if (entry->scoreType == Exact) {
+            return entry->score;
+        }
+        else if (entry->scoreType == LowerBound) {
+            if (entry->score >= beta) {
+                return entry->score;
+            }
+        }
+        else if (entry->scoreType == UpperBound) {
+            if (entry->score <= alpha) {
+                return entry->score;
+            }
+        }
+    }
+
     std::vector<Move> moves = GenMoves(board, colorToMove);
     if (moves.empty()) { 
         if (InCheck(board, colorToMove)) { // checkmate
@@ -241,33 +258,45 @@ static int Minimax(Board& board, int depth, Color colorToMove, Color engineColor
     }
     std::sort(moves.begin(), moves.end(), [&](const Move& a, const Move& b){ return MoveComparator(a, b, depth); });
     int bestScore = engineTurn ? INT_MIN : INT_MAX;
+    ScoreType scoreType = Exact;
+    const Move* bestMove = &moves[0];
     for (const Move& move : moves) {
-        MakeMove(move, board, colorToMove);
-        int score = Minimax(board, depth - 1, ToggleColor(colorToMove), engineColor, alpha, beta);
+        auto newBoardHash = boardHash;
+        MakeMove(move, board, colorToMove, newBoardHash);
+        int score = Minimax(board, depth - 1, ToggleColor(colorToMove), engineColor, alpha, beta, newBoardHash);
         UndoMove(move, board, colorToMove);
         if (engineTurn) { 
-            bestScore = std::max(score, bestScore);
+            if (score > bestScore) {
+                bestScore = score;
+                bestMove = &move;
+            }
             alpha = std::max(alpha, bestScore);
             if (beta <= alpha) {
                 if (move.capturedPieceType == PieceType::None) {
                     killerMoves[depth][1] = killerMoves[depth][0];
                     killerMoves[depth][0] = move;
                 }
+                scoreType = LowerBound;
                 break;
             }
         }
         else {
-            bestScore = std::min(score, bestScore);
+            if (score < bestScore) {
+                bestScore = score;
+                bestMove = &move;
+            }
             beta = std::min(beta, bestScore);
             if (beta <= alpha) {
                 if (move.capturedPieceType == PieceType::None) {
                     killerMoves[depth][1] = killerMoves[depth][0];
                     killerMoves[depth][0] = move;
                 }
+                scoreType = UpperBound;
                 break;
             }
         }
     }
+    transpositionTable.Add(board, colorToMove, depth, bestScore, scoreType, *bestMove);
     return bestScore;
 }
 
@@ -278,6 +307,7 @@ Move Search(const Board& board, int maxDepth, Color colorToMove) {
     if (moves.empty()) {
         return Move{};
     }
+    const auto boardHash = transpositionTable.Hash(board, colorToMove);
     Board boardCopy = board;
     std::sort(moves.begin(), moves.end(), [&](const Move& a, const Move& b){ return MoveComparator(a, b, maxDepth); });
     Move* bestMove = &moves[0];
@@ -286,14 +316,16 @@ Move Search(const Board& board, int maxDepth, Color colorToMove) {
         int alpha = INT_MIN;
         int beta = INT_MAX;
         for (Move& move : moves) {
-            MakeMove(move, boardCopy, colorToMove);
-            int score = Minimax(boardCopy, depth - 1, ToggleColor(engineColor), engineColor, alpha, beta);
+            auto newBoardHash = boardHash;
+            MakeMove(move, boardCopy, colorToMove, newBoardHash);
+            int score = Minimax(boardCopy, depth - 1, ToggleColor(engineColor), engineColor, alpha, beta, newBoardHash);
             if (score > bestScore) {
                 bestScore = score;
                 bestMove = &move;
                 alpha = std::max(alpha, bestScore);
             }
             UndoMove(move, boardCopy, colorToMove);
+            
         }
         std::swap(*bestMove, moves[0]); 
     }
