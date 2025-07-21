@@ -201,6 +201,7 @@ static int Evaluate(const Board& board, Color color) {
 }
 
 Move killerMoves[64][2] = {};
+int historyTable[64][64] = {}; // [from][to] - tracks how good moves have been
 
 static int ScoreMove(const Move& move, int depth) {
     int value = 0;
@@ -216,7 +217,8 @@ static int ScoreMove(const Move& move, int depth) {
     if (move == killerMoves[depth][1]) {
         return 8000;
     }
-    return 0;
+    // History heuristic score
+    return historyTable[move.from][move.to];
 }
 
 
@@ -352,12 +354,18 @@ static int Minimax(Board& board, int depth, Color colorToMove, Color engineColor
         }
     }
 
-    // Null move pruning disabled for now - needs proper hash handling
+    // Null move pruning temporarily disabled due to implementation issues
     /*
     if (nullMoveAllowed && depth >= 3 && !InCheck(board, colorToMove)) {
         const int nullMoveReduction = 2;
-        // For null move, we just flip the color without making any move
-        int nullScore = -Minimax(board, depth - 1 - nullMoveReduction, ToggleColor(colorToMove), engineColor, -beta, -beta + 1, boardHash, maxSearchTime, false);
+        // For null move, we need to update the hash to reflect color change
+        std::uint64_t nullMoveHash = boardHash;
+        if (colorToMove == White) {
+            nullMoveHash ^= transpositionTable.blackToMoveZobrist; // Remove white to move
+        } else {
+            nullMoveHash ^= transpositionTable.blackToMoveZobrist; // Add white to move  
+        }
+        int nullScore = -Minimax(board, depth - 1 - nullMoveReduction, ToggleColor(colorToMove), engineColor, -beta, -beta + 1, nullMoveHash, maxSearchTime, false);
         if (nullScore >= beta) {
             return nullScore; // Null move cutoff
         }
@@ -435,6 +443,8 @@ static int Minimax(Board& board, int depth, Color colorToMove, Color engineColor
                 if (move.capturedPieceType == PieceType::None) {
                     killerMoves[depth][1] = killerMoves[depth][0];
                     killerMoves[depth][0] = move;
+                    // Update history table for good non-capture moves
+                    historyTable[move.from][move.to] += depth * depth;
                 }
                 scoreType = LowerBound;
                 break;
@@ -450,6 +460,8 @@ static int Minimax(Board& board, int depth, Color colorToMove, Color engineColor
                 if (move.capturedPieceType == PieceType::None) {
                     killerMoves[depth][1] = killerMoves[depth][0];
                     killerMoves[depth][0] = move;
+                    // Update history table for good non-capture moves
+                    historyTable[move.from][move.to] += depth * depth;
                 }
                 scoreType = UpperBound;
                 break;
@@ -464,6 +476,7 @@ static int Minimax(Board& board, int depth, Color colorToMove, Color engineColor
 Move Search(const Board& board, Color colorToMove, int totalTimeRemaining, int inc) {
     std::uint64_t startTime = TimestampMS();
     std::memset(killerMoves, 0, sizeof(killerMoves));
+    std::memset(historyTable, 0, sizeof(historyTable));
     int searchTime = totalTimeRemaining / 20 + inc / 2;
     if (searchTime > totalTimeRemaining) {
         searchTime = totalTimeRemaining - 500;
