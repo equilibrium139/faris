@@ -1,5 +1,6 @@
 #include "search.h"
 #include "board.h"
+#include <chrono>
 #include "movegen.h"
 #include "transposition.h"
 #include "utilities.h"
@@ -170,7 +171,7 @@ static int Evaluate(const Board& board, Color color) {
 
     Bitboard occupancy = board.Occupancy();
     int doubled = DoubledPawns(pawnBB);
-    int oppDoubled = DoubledPawns(oppDoubled);
+    int oppDoubled = DoubledPawns(oppPawnBB);
     int blocked = BlockedPawns(pawnBB, occupancy, color);
     int oppBlocked = BlockedPawns(oppPawnBB, occupancy, oppColor);
     int isolated = IsolatedPawns(pawnBB, color);
@@ -204,7 +205,7 @@ Move killerMoves[64][2] = {};
 static int ScoreMove(const Move& move, int depth) {
     int value = 0;
     if (move.capturedPieceType != PieceType::None) {
-        return 10000 + pieceValues[(int)move.capturedPieceType] - pieceValues[(int)move.type];
+        return 10000 + pieceValues[(int)move.capturedPieceType] - pieceValues[(int)move.type]/10;
     }
     if (move.promotionType != PieceType::None) {
         return 10000 + pieceValues[(int)move.promotionType];
@@ -225,7 +226,28 @@ static bool MoveComparator(const Move& a, const Move& b, int depth) {
     return aScore > bScore;
 }
 
-static int Minimax(Board& board, int depth, Color colorToMove, Color engineColor, int alpha, int beta, const std::uint64_t boardHash) {
+static constexpr int NODE_INTERVAL_CHECK = 4096;
+static int nodeCounter = NODE_INTERVAL_CHECK;
+static constexpr int ABORT_SEARCH_VALUE = INT_MAX;
+
+static std::uint64_t TimestampMS() {
+    auto now = std::chrono::system_clock::now();
+    auto duration_since_epoch = now.time_since_epoch();
+    auto milliseconds_duration = std::chrono::duration_cast<std::chrono::milliseconds>(duration_since_epoch);
+    std::uint64_t timestamp_milliseconds = milliseconds_duration.count();
+    return timestamp_milliseconds;
+}
+
+static int Minimax(Board& board, int depth, Color colorToMove, Color engineColor, int alpha, int beta, const std::uint64_t boardHash, std::uint64_t maxSearchTime) {
+    --nodeCounter;
+    if (nodeCounter <= 0) {
+        nodeCounter = NODE_INTERVAL_CHECK;
+        // TODO: check shared boolean variable 
+        auto currentTime = TimestampMS();
+        if (currentTime >= maxSearchTime) {
+            return ABORT_SEARCH_VALUE;
+        }
+    }
     if (depth == 0) {
         return Evaluate(board, engineColor);
     }
@@ -263,7 +285,10 @@ static int Minimax(Board& board, int depth, Color colorToMove, Color engineColor
     for (const Move& move : moves) {
         auto newBoardHash = boardHash;
         MakeMove(move, board, colorToMove, newBoardHash);
-        int score = Minimax(board, depth - 1, ToggleColor(colorToMove), engineColor, alpha, beta, newBoardHash);
+        int score = Minimax(board, depth - 1, ToggleColor(colorToMove), engineColor, alpha, beta, newBoardHash, maxSearchTime);
+        if (score == ABORT_SEARCH_VALUE) {
+            return ABORT_SEARCH_VALUE;
+        }
         UndoMove(move, board, colorToMove);
         if (engineTurn) { 
             if (score > bestScore) {
@@ -300,13 +325,24 @@ static int Minimax(Board& board, int depth, Color colorToMove, Color engineColor
     return bestScore;
 }
 
-Move Search(const Board& board, int maxDepth, Color colorToMove) {
+// TODO: handle 3-fold repetition draw
+Move Search(const Board& board, Color colorToMove, int totalTimeRemaining, int inc) {
+    std::uint64_t startTime = TimestampMS();
     std::memset(killerMoves, 0, sizeof(killerMoves));
+    int searchTime = totalTimeRemaining / 20 + inc / 2;
+    if (searchTime > totalTimeRemaining) {
+        searchTime = totalTimeRemaining - 500;
+    }
+    if (searchTime <= 0) {
+        searchTime = totalTimeRemaining;
+    }
+    auto maxSearchTime = startTime + searchTime;
     Color engineColor = colorToMove;
     std::vector<Move> moves = GenMoves(board, colorToMove);
     if (moves.empty()) {
         return Move{};
     }
+    const int maxDepth = 10; 
     const auto boardHash = transpositionTable.Hash(board, colorToMove);
     Board boardCopy = board;
     std::sort(moves.begin(), moves.end(), [&](const Move& a, const Move& b){ return MoveComparator(a, b, maxDepth); });
@@ -315,17 +351,28 @@ Move Search(const Board& board, int maxDepth, Color colorToMove) {
         int bestScore = INT_MIN;
         int alpha = INT_MIN;
         int beta = INT_MAX;
+        std::uint64_t currentDepthSearchBegin = TimestampMS();
         for (Move& move : moves) {
             auto newBoardHash = boardHash;
             MakeMove(move, boardCopy, colorToMove, newBoardHash);
-            int score = Minimax(boardCopy, depth - 1, ToggleColor(engineColor), engineColor, alpha, beta, newBoardHash);
+            int score = Minimax(boardCopy, depth - 1, ToggleColor(engineColor), engineColor, alpha, beta, newBoardHash, maxSearchTime);
+            if (score == ABORT_SEARCH_VALUE) {
+                return *bestMove;
+            }
             if (score > bestScore) {
                 bestScore = score;
                 bestMove = &move;
                 alpha = std::max(alpha, bestScore);
             }
             UndoMove(move, boardCopy, colorToMove);
-            
+        }
+        std::uint64_t currentTime = TimestampMS(); 
+        //auto currentDepthSearchDuration = currentTime - currentDepthSearchBegin;
+        //auto nextDepthSearchDurationGuess = currentDepthSearchDuration * 2;
+        //auto totalSearchDuration = currentTime - startTime;
+        //auto searchTimeRemaining = searchTime - (totalSearchDuration);
+        if (currentTime >= maxSearchTime) {
+            return *bestMove;
         }
         std::swap(*bestMove, moves[0]); 
     }

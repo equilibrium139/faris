@@ -4,6 +4,7 @@
 #include <fstream>
 #include <immintrin.h>
 #include <iostream>
+#include <random>
 #include <vector>
 
 #include "board.h"
@@ -89,10 +90,10 @@ static Bitboard GenBishopMask(Square square) {
 
 static std::uint64_t RandomUint64() {
     std::uint64_t u1, u2, u3, u4;
-    u1 = (std::uint64_t)(random()) & 0xFFFF;
-    u2 = (std::uint64_t)(random()) & 0xFFFF;
-    u3 = (std::uint64_t)(random()) & 0xFFFF;
-    u4 = (std::uint64_t)(random()) & 0xFFFF;
+    u1 = (std::uint64_t)(rand()) & 0xFFFF;
+    u2 = (std::uint64_t)(rand()) & 0xFFFF;
+    u3 = (std::uint64_t)(rand()) & 0xFFFF;
+    u4 = (std::uint64_t)(rand()) & 0xFFFF;
     return u1 | (u2 << 16) | (u3 << 32) | (u4 << 48);
 }
 

@@ -55,6 +55,7 @@ const TTEntry* TT::Search(const Board& board, Color colorToMove, std::uint64_t h
     auto index = hash % size;
     const TTEntry* entry = &table[index];
     if (entry->hash == hash) {
+        hits++;
         return entry;
     }
     return nullptr;

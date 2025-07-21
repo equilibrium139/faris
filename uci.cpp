@@ -3,6 +3,7 @@
 #include "fen.h"
 #include "movegen.h"
 #include "search.h"
+#include "transposition.h"
 #include "utilities.h"
 #include <cassert>
 #include <iostream>
@@ -56,6 +57,7 @@ void ProcessInput() {
                 state.colorToMove = fen.colorToMove;
             }
             else {
+                state.board = Board();
                 ss >> token; // skip "startingpos" token
             }
             if (token == "moves") {
@@ -72,7 +74,6 @@ void ProcessInput() {
             }
         }
         else if (token == "go") {
-            /*
             ss >> token;
             assert(token == "wtime");
             ss >> state.wtime;
@@ -85,15 +86,23 @@ void ProcessInput() {
             ss >> token;
             assert(token == "binc");
             ss >> state.binc;
-            */
-            ss >> token;
-            int depth = std::stoi(token);
-            std::cout << "Computing...\n";
-            Move move = Search(state.board, depth, state.colorToMove);
-            std::cout << "Best move: " <<  MoveToUCINotation(move) << std::endl;
+            std::cerr << "Computing...\n";
+            int time, inc;
+            if (state.colorToMove == White) {
+                time = state.wtime;
+                inc = state.winc;
+            }
+            else {
+                time = state.btime;
+                inc = state.binc;
+            }
+            Move move = Search(state.board, state.colorToMove, time, inc);
+            // TODO: implement ponder
+            std::cout << "bestmove " << MoveToUCINotation(move) << std::endl;
+            std::cerr << transpositionTable.hits << std::endl;
         }
         else if (token == "uci") {
-            std::cout << "id name Faris\nid Author Zaid Al-ruwaishan\nuciok" << std::endl;
+            std::cout << "id name Faris\n\tid Author Zaid Al-ruwaishan\n\tuciok" << std::endl;
         }
         else if (token == "ucinewgame") {
             // Not much to do here at this point...

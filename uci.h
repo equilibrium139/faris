@@ -2,11 +2,11 @@
 
 struct UCIState {
     Board board;
-    Color colorToMove;
+    Color colorToMove = White;
     int wtime;
     int btime;
-    int winc;
-    int binc;
+    int winc = 0;
+    int binc = 0;
 };
 
 void ProcessInput();

@@ -13,6 +13,12 @@
 #include <streambuf>
 #include <string_view>
 
+#ifdef _WIN32
+#include <cstdio>
+#define popen _popen
+#define pclose _pclose
+#endif
+
 static std::string ExecAndCaptureOutput(const std::string& command) {
     FILE* pipe = popen(command.c_str(), "r"); 
     if (!pipe) {

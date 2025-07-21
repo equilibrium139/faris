@@ -42,6 +42,7 @@ static constexpr Bitboard PROMOTION_RANK_MASK[2] = { (Bitboard)0xFF << 56, (Bitb
 static constexpr Bitboard fileAMask = 0x1ULL | 0x1ULL << 8 | 0x1ULL << 16 | 0x1ULL << 24 | 0x1ULL << 32 | 0x1ULL << 40 | 0x1ULL << 48 | 0x1ULL << 56;
 static constexpr Bitboard FILE_MASK[8] = { fileAMask, fileAMask << 1, fileAMask << 2, fileAMask << 3, fileAMask << 4, fileAMask << 5, fileAMask << 6, fileAMask << 7 };
 
+// TODO: check if countr_zero is the reason Windows build is significantly slower than WSL build
 static constexpr Square LSB(Bitboard b) {
     return std::countr_zero(b);
 }

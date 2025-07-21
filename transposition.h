@@ -18,8 +18,9 @@ struct TTEntry {
 };
 
 struct TT {
-    static constexpr int size = 10'000'000;
+    static constexpr int size = 40'000'000;
 
+    std::uint64_t hits = 0;
     std::vector<TTEntry> table{size};
     std::uint64_t pieceZobrist[64][6][2];
     std::uint64_t blackToMoveZobrist;
