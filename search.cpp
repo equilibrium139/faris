@@ -238,7 +238,90 @@ static std::uint64_t TimestampMS() {
     return timestamp_milliseconds;
 }
 
-static int Minimax(Board& board, int depth, Color colorToMove, Color engineColor, int alpha, int beta, const std::uint64_t boardHash, std::uint64_t maxSearchTime) {
+// Generate only tactical moves (captures and promotions)
+static std::vector<Move> GenTacticalMoves(const Board& board, Color colorToMove) {
+    std::vector<Move> allMoves = GenMoves(board, colorToMove);
+    std::vector<Move> tacticalMoves;
+    tacticalMoves.reserve(allMoves.size() / 4); // Reserve some space
+    
+    for (const Move& move : allMoves) {
+        if (move.capturedPieceType != PieceType::None || move.promotionType != PieceType::None) {
+            tacticalMoves.push_back(move);
+        }
+    }
+    return tacticalMoves;
+}
+
+// Quiescence search - search only tactical moves to avoid horizon effect
+static int Quiescence(Board& board, Color colorToMove, Color engineColor, int alpha, int beta, const std::uint64_t boardHash, std::uint64_t maxSearchTime) {
+    --nodeCounter;
+    if (nodeCounter <= 0) {
+        nodeCounter = NODE_INTERVAL_CHECK;
+        auto currentTime = TimestampMS();
+        if (currentTime >= maxSearchTime) {
+            return ABORT_SEARCH_VALUE;
+        }
+    }
+    
+    bool engineTurn = colorToMove == engineColor;
+    int standPat = Evaluate(board, engineColor);
+    
+    // Stand pat (do nothing) cutoff
+    if (engineTurn) {
+        if (standPat >= beta) {
+            return standPat;
+        }
+        alpha = std::max(alpha, standPat);
+    } else {
+        if (standPat <= alpha) {
+            return standPat;
+        }
+        beta = std::min(beta, standPat);
+    }
+    
+    // Generate only tactical moves (captures and promotions)
+    std::vector<Move> tacticalMoves = GenTacticalMoves(board, colorToMove);
+    if (tacticalMoves.empty()) {
+        return standPat;
+    }
+    
+    // Sort tactical moves by score
+    std::sort(tacticalMoves.begin(), tacticalMoves.end(), [&](const Move& a, const Move& b) {
+        return MoveComparator(a, b, 0);
+    });
+    
+    int bestScore = standPat;
+    for (const Move& move : tacticalMoves) {
+        auto newBoardHash = boardHash;
+        MakeMove(move, board, colorToMove, newBoardHash);
+        int score = Quiescence(board, ToggleColor(colorToMove), engineColor, alpha, beta, newBoardHash, maxSearchTime);
+        if (score == ABORT_SEARCH_VALUE) {
+            return ABORT_SEARCH_VALUE;
+        }
+        UndoMove(move, board, colorToMove);
+        
+        if (engineTurn) {
+            if (score > bestScore) {
+                bestScore = score;
+            }
+            alpha = std::max(alpha, bestScore);
+            if (beta <= alpha) {
+                break; // Alpha-beta cutoff
+            }
+        } else {
+            if (score < bestScore) {
+                bestScore = score;
+            }
+            beta = std::min(beta, bestScore);
+            if (beta <= alpha) {
+                break; // Alpha-beta cutoff
+            }
+        }
+    }
+    return bestScore;
+}
+
+static int Minimax(Board& board, int depth, Color colorToMove, Color engineColor, int alpha, int beta, const std::uint64_t boardHash, std::uint64_t maxSearchTime, bool nullMoveAllowed = true) {
     --nodeCounter;
     if (nodeCounter <= 0) {
         nodeCounter = NODE_INTERVAL_CHECK;
@@ -249,7 +332,7 @@ static int Minimax(Board& board, int depth, Color colorToMove, Color engineColor
         }
     }
     if (depth == 0) {
-        return Evaluate(board, engineColor);
+        return Quiescence(board, colorToMove, engineColor, alpha, beta, boardHash, maxSearchTime);
     }
     bool engineTurn = colorToMove == engineColor;
     const TTEntry* entry = transpositionTable.Search(board, colorToMove, boardHash);
@@ -269,6 +352,18 @@ static int Minimax(Board& board, int depth, Color colorToMove, Color engineColor
         }
     }
 
+    // Null move pruning disabled for now - needs proper hash handling
+    /*
+    if (nullMoveAllowed && depth >= 3 && !InCheck(board, colorToMove)) {
+        const int nullMoveReduction = 2;
+        // For null move, we just flip the color without making any move
+        int nullScore = -Minimax(board, depth - 1 - nullMoveReduction, ToggleColor(colorToMove), engineColor, -beta, -beta + 1, boardHash, maxSearchTime, false);
+        if (nullScore >= beta) {
+            return nullScore; // Null move cutoff
+        }
+    }
+    */
+
     std::vector<Move> moves = GenMoves(board, colorToMove);
     if (moves.empty()) { 
         if (InCheck(board, colorToMove)) { // checkmate
@@ -278,14 +373,54 @@ static int Minimax(Board& board, int depth, Color colorToMove, Color engineColor
             return 0;
         }
     }
-    std::sort(moves.begin(), moves.end(), [&](const Move& a, const Move& b){ return MoveComparator(a, b, depth); });
+    
+    // Sort moves with hash move first (if available), then by score
+    Move hashMove = {};
+    bool hasHashMove = false;
+    if (entry && entry->depth >= 0) { // Use hash move if we have a TT entry
+        hashMove = entry->bestMove;
+        hasHashMove = true;
+    }
+    
+    std::sort(moves.begin(), moves.end(), [&](const Move& a, const Move& b) {
+        // Hash move gets highest priority
+        if (hasHashMove) {
+            if (a == hashMove && !(b == hashMove)) return true;
+            if (b == hashMove && !(a == hashMove)) return false;
+        }
+        return MoveComparator(a, b, depth); 
+    });
     int bestScore = engineTurn ? INT_MIN : INT_MAX;
     ScoreType scoreType = Exact;
     const Move* bestMove = &moves[0];
+    int moveCount = 0;
     for (const Move& move : moves) {
+        moveCount++;
         auto newBoardHash = boardHash;
         MakeMove(move, board, colorToMove, newBoardHash);
-        int score = Minimax(board, depth - 1, ToggleColor(colorToMove), engineColor, alpha, beta, newBoardHash, maxSearchTime);
+        
+        int score;
+        
+        // Late Move Reductions (LMR) - search later moves with reduced depth
+        bool isLateMove = moveCount > 3;
+        bool isTactical = move.capturedPieceType != PieceType::None || move.promotionType != PieceType::None;
+        // Removed InCheck call after making move - this was causing the assertion failure
+        
+        if (isLateMove && depth >= 3 && !isTactical) {
+            // Search with reduced depth first
+            int reduction = 1;
+            if (moveCount > 6) reduction = 2;
+            
+            score = Minimax(board, depth - 1 - reduction, ToggleColor(colorToMove), engineColor, alpha, beta, newBoardHash, maxSearchTime, true);
+            
+            // If the reduced search shows promise, re-search at full depth
+            if ((engineTurn && score > alpha) || (!engineTurn && score < beta)) {
+                score = Minimax(board, depth - 1, ToggleColor(colorToMove), engineColor, alpha, beta, newBoardHash, maxSearchTime, true);
+            }
+        } else {
+            score = Minimax(board, depth - 1, ToggleColor(colorToMove), engineColor, alpha, beta, newBoardHash, maxSearchTime, true);
+        }
+        
         if (score == ABORT_SEARCH_VALUE) {
             return ABORT_SEARCH_VALUE;
         }
@@ -355,7 +490,7 @@ Move Search(const Board& board, Color colorToMove, int totalTimeRemaining, int i
         for (Move& move : moves) {
             auto newBoardHash = boardHash;
             MakeMove(move, boardCopy, colorToMove, newBoardHash);
-            int score = Minimax(boardCopy, depth - 1, ToggleColor(engineColor), engineColor, alpha, beta, newBoardHash, maxSearchTime);
+            int score = Minimax(boardCopy, depth - 1, ToggleColor(engineColor), engineColor, alpha, beta, newBoardHash, maxSearchTime, true);
             if (score == ABORT_SEARCH_VALUE) {
                 return *bestMove;
             }
