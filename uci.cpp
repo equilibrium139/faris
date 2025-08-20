@@ -102,7 +102,7 @@ void ProcessInput() {
             std::cerr << transpositionTable.hits << std::endl;
         }
         else if (token == "uci") {
-            std::cout << "id name Faris\n\tid Author Zaid Al-ruwaishan\n\tuciok" << std::endl;
+            std::cout << "id name Faris\nid Author Zaid Al-ruwaishan\nuciok" << std::endl;
         }
         else if (token == "ucinewgame") {
             // Not much to do here at this point...
