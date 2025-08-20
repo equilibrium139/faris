@@ -45,6 +45,7 @@ void ProcessInput() {
         std::string token;
         ss >> token;
         if (token == "position") {
+            threefoldRepetitionTable.clear();
             ss >> token;
             state.colorToMove = White;
             if (token == "fen") {
@@ -60,12 +61,15 @@ void ProcessInput() {
                 state.board = Board();
                 ss >> token; // skip "startingpos" token
             }
+            std::uint64_t hash = transpositionTable.Hash(state.board, state.colorToMove);
+            threefoldRepetitionTable[hash]++;
             if (token == "moves") {
                 while (ss >> token) {
                     std::vector<Move> moves = GenMoves(state.board, state.colorToMove);
                     for (const Move& move : moves) {
                         if (MoveToUCINotation(move) == token) {
-                            MakeMove(move, state.board, state.colorToMove);
+                            MakeMove(move, state.board, state.colorToMove, hash);
+                            threefoldRepetitionTable[hash]++;
                             state.colorToMove = ToggleColor(state.colorToMove);
                             break;
                         }
@@ -99,12 +103,12 @@ void ProcessInput() {
             Move move = Search(state.board, state.colorToMove, time, inc);
             // TODO: implement ponder
             std::cout << "bestmove " << MoveToUCINotation(move) << std::endl;
-            std::cerr << transpositionTable.hits << std::endl;
         }
         else if (token == "uci") {
             std::cout << "id name Faris\nid Author Zaid Al-ruwaishan\nuciok" << std::endl;
         }
         else if (token == "ucinewgame") {
+            threefoldRepetitionTable.clear();
             // Not much to do here at this point...
         }
         else if (token == "isready") {
