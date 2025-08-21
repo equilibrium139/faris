@@ -105,10 +105,12 @@ void ProcessInput() {
             std::cout << "bestmove " << MoveToUCINotation(move) << std::endl;
         }
         else if (token == "uci") {
-            std::cout << "id name Faris\nid Author Zaid Al-ruwaishan\nuciok" << std::endl;
+            std::cout << "id name Faris\nid author Zaid Al-ruwaishan\nuciok" << std::endl;
         }
         else if (token == "ucinewgame") {
+            std::cerr << "Recieved ucinewgame... clearing table" << std::endl;
             threefoldRepetitionTable.clear();
+            std::cerr << "Table cleared" << std::endl;
             // Not much to do here at this point...
         }
         else if (token == "isready") {
@@ -116,6 +118,9 @@ void ProcessInput() {
         }
         else if (token == "quit") {
             return;
+        }
+        else {
+            std::cerr << "Recieved unknown token: '" << token << "'" << std::endl;
         }
     }
 }
