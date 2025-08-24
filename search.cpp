@@ -361,40 +361,42 @@ Move Search(const Board& board, Color colorToMove, int totalTimeRemaining, int i
     const int maxDepth = 10; 
     const auto boardHash = transpositionTable.Hash(board, colorToMove);
     threefoldRepetitionTable[boardHash]++;
-    Board boardCopy = board;
     std::sort(moves.begin(), moves.end(), [&](const Move& a, const Move& b){ return MoveComparator(a, b, maxDepth, colorToMove); });
-    Move* bestMove = &moves[0];
-    for (int depth = 1; depth <= maxDepth; depth++) {
-        int bestScore = INT_MIN;
-        int alpha = INT_MIN;
-        int beta = INT_MAX;
-        std::uint64_t currentDepthSearchBegin = TimestampMS();
-        for (Move& move : moves) {
-            auto newBoardHash = boardHash;
-            MakeMove(move, boardCopy, colorToMove, newBoardHash);
-            threefoldRepetitionTable[newBoardHash]++;
-            bool draw = CheckThreefoldRepetition(newBoardHash);
-            int score = draw ? 0 : Minimax(boardCopy, depth - 1, ToggleColor(engineColor), engineColor, alpha, beta, newBoardHash, maxSearchTime);
-            if (score == ABORT_SEARCH_VALUE) {
-                return *bestMove;
-            }
-            if (score > bestScore) {
-                bestScore = score;
-                bestMove = &move;
-                alpha = std::max(alpha, bestScore);
-            }
-            UndoMove(move, boardCopy, colorToMove);
-            threefoldRepetitionTable[newBoardHash]--;
+    int alpha = INT_MIN;
+    int beta = INT_MAX;
+    int score = 0;
+    for (int depth = 1; ; depth++) {
+        int delta = 25;
+        if (depth > 1) {
+            alpha = score - delta;
+            beta = score + delta;
         }
-        std::uint64_t currentTime = TimestampMS(); 
-        //auto currentDepthSearchDuration = currentTime - currentDepthSearchBegin;
-        //auto nextDepthSearchDurationGuess = currentDepthSearchDuration * 2;
-        //auto totalSearchDuration = currentTime - startTime;
-        //auto searchTimeRemaining = searchTime - (totalSearchDuration);
-        if (currentTime >= maxSearchTime) {
-            return *bestMove;
+        Board boardCopy = board;
+        while (true) {
+            score = Minimax(boardCopy, depth, colorToMove, engineColor, alpha, beta, boardHash, maxSearchTime);
+            if (score == ABORT_SEARCH_VALUE || TimestampMS() >= maxSearchTime) {
+                break;
+            }
+            if (score <= alpha) { // fail low, re-search
+                alpha -= 40;
+                continue;
+            }
+            else if (score >= beta) { // fail high, ditto
+                beta += 40;
+                continue;
+            }
+            break;
         }
-        std::swap(*bestMove, moves[0]); 
+        if (score == ABORT_SEARCH_VALUE || TimestampMS() >= maxSearchTime) {
+            break;
+        }
+        const TTEntry* entry = transpositionTable.Search(board, colorToMove, boardHash);
+        if (entry) {
+            auto bestIter = std::find(moves.begin(), moves.end(), entry->bestMove);
+            assert(bestIter != moves.end());
+            std::swap(*bestIter, *moves.begin());
+        }
     }
-    return *bestMove;
+    threefoldRepetitionTable[boardHash]--;
+    return moves[0]; // we always move the best move to the beginning
 }
