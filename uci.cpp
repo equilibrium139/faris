@@ -59,7 +59,7 @@ void ProcessInput() {
             }
             else {
                 state.board = Board();
-                ss >> token; // skip "startingpos" token
+                ss >> token; // skip "startpos" token
             }
             std::uint64_t hash = transpositionTable.Hash(state.board, state.colorToMove);
             threefoldRepetitionTable[hash]++;
@@ -100,12 +100,18 @@ void ProcessInput() {
                 time = state.btime;
                 inc = state.binc;
             }
-            Move move = Search(state.board, state.colorToMove, time, inc);
+            if (state.useNewFeature) {
+                std::cerr << "Using new feature\n";
+            }
+            else {
+                std::cerr << "Not using new feature\n";
+            }
+            Move move = Search(state.board, state.colorToMove, time, inc, state.useNewFeature);
             // TODO: implement ponder
             std::cout << "bestmove " << MoveToUCINotation(move) << std::endl;
         }
         else if (token == "uci") {
-            std::cout << "id name Faris\nid author Zaid Al-ruwaishan\nuciok" << std::endl;
+            std::cout << "id name Faris\nid author Zaid Al-ruwaishan\noption name UseNewFeature type check default false\nuciok" << std::endl;
         }
         else if (token == "ucinewgame") {
             std::cerr << "Recieved ucinewgame... clearing table" << std::endl;
@@ -115,6 +121,10 @@ void ProcessInput() {
         }
         else if (token == "isready") {
             std::cout << "readyok" << std::endl;
+        }
+        else if (token == "setoption") {
+            // For now there is only one option so assuming this is only provided to enable new feature
+            state.useNewFeature = true;
         }
         else if (token == "quit") {
             return;

@@ -48,10 +48,10 @@ std::uint64_t TT::Hash(const Board& board, Color colorToMove) {
 
 const TTEntry* TT::Search(const Board& board, Color colorToMove) {
     auto hash = Hash(board, colorToMove);
-    return Search(board, colorToMove, hash);
+    return Search(hash);
 }
 
-const TTEntry* TT::Search(const Board& board, Color colorToMove, std::uint64_t hash) {
+const TTEntry* TT::Search(std::uint64_t hash) {
     auto index = hash % size;
     const TTEntry* entry = &table[index];
     if (entry->hash == hash) {
