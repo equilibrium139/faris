@@ -214,6 +214,7 @@ static int ScoreMove(const Move& move, int depth, Color colorToMove, const Move&
     if (move == ttMove) {
         return 14000;
     }
+    // TODO: this has to be wrong. Not considering moves that are both promotions and captures
     if (move.capturedPieceType != PieceType::None) {
         return 10000 + pieceValues[(int)move.capturedPieceType] - pieceValues[(int)move.type]/10;
     }
@@ -290,24 +291,32 @@ static int Quiesce(Board& board, int depth, Color colorToMove, Color engineColor
         return bestScore;
     }
 
-    std::vector<Move> moves = GenMoves(board, colorToMove);
-    // TODO: GenCaptures func
-    std::vector<Move> captures;
-    for (const Move& m : moves) {
-        if (m.capturedPieceType != PieceType::None) captures.push_back(m);
-    }
-    if (captures.empty()) { 
+
+    std::vector<Move> tacticalMoves = GenMoves(board, colorToMove, true);
+    if (tacticalMoves.empty()) { 
         transpositionTable.Add(board, colorToMove, 0, bestScore, Exact, Move{});
         return bestScore;
     }
-    std::sort(captures.begin(), captures.end(), [](const Move& a, const Move& b) {
-            int aScore = pieceValues[(int)a.capturedPieceType] * 16 - pieceValues[(int)a.type];
-            int bScore = pieceValues[(int)b.capturedPieceType] * 16 - pieceValues[(int)b.type];
+    std::sort(tacticalMoves.begin(), tacticalMoves.end(), [](const Move& a, const Move& b) {
+            int aScore = 0;
+            if (a.capturedPieceType != PieceType::None) {
+                aScore += pieceValues[(int)a.capturedPieceType] * 16 - pieceValues[(int)a.type];
+            }
+            if (a.promotionType != PieceType::None) {
+                aScore += pieceValues[(int)a.promotionType] * 16;
+            }
+            int bScore = 0;
+            if (b.capturedPieceType != PieceType::None) {
+                bScore += pieceValues[(int)b.capturedPieceType] * 16 - pieceValues[(int)b.type];
+            }
+            if (b.promotionType != PieceType::None) {
+                bScore += pieceValues[(int)b.promotionType] * 16;
+            }
             return aScore > bScore;
     });
     ScoreType scoreType = Exact;
     Move bestMove = Move{};
-    for (const Move& move : captures) {
+    for (const Move& move : tacticalMoves) {
         auto newBoardHash = boardHash;
         MakeMove(move, board, colorToMove, newBoardHash);
         int repetitionCount = ++threefoldRepetitionTable[newBoardHash];

@@ -30,7 +30,8 @@ inline Move::CastlingFlags operator|(Move::CastlingFlags lhs, Move::CastlingFlag
 }
 
 extern int maxDepth;
-std::vector<Move> GenMoves(const Board& board, Color colorToMove);
+// tacticalOnly -> captures and promotions
+std::vector<Move> GenMoves(const Board& board, Color colorToMove, bool tacticalOnly=false);
 
 int IncrementCastles();
 int IncrementCaptures();

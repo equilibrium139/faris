@@ -23,7 +23,7 @@ int IncrementEnPassant() {
 // TODO: make move arrays constexpr
 // TODO: change whiteTurn to color and don't hardcode 0/1 for black/white
 // TODO: use Square instead of int or other integer types
-std::vector<Move> GenMoves(const Board& board, Color colorToMove) {
+std::vector<Move> GenMoves(const Board& board, Color colorToMove, bool tacticalOnly) {
     std::vector<Move> moves;
     const Color opponentColor = ToggleColor(colorToMove);
     const Bitboard occupancy = board.Occupancy();
@@ -57,7 +57,7 @@ std::vector<Move> GenMoves(const Board& board, Color colorToMove) {
             }
         }
     }
-    while (nonPromotions) {
+    while (!tacticalOnly && nonPromotions) {
         Square to = PopLSB(nonPromotions); 
         Square from = to - pawnDirection;
         Board newBoard = board;
@@ -71,7 +71,7 @@ std::vector<Move> GenMoves(const Board& board, Color colorToMove) {
     const Bitboard doublePushRankMask = colorToMove == White ? RANK_MASK[(int)Rank::Third] : RANK_MASK[(int)Rank::Sixth];
     Bitboard doublePushes = colorToMove == White ? ((singlePushes & doublePushRankMask) << 8) & ~occupancy :
                                                    ((singlePushes & doublePushRankMask) >> 8) & ~occupancy;
-    while (doublePushes) {
+    while (!tacticalOnly && doublePushes) {
         Square to = PopLSB(doublePushes);
         Square from = to - pawnDirection * 2;
         Board newBoard = board;
@@ -166,6 +166,9 @@ std::vector<Move> GenMoves(const Board& board, Color colorToMove) {
     while (knights) {
         Square from = PopLSB(knights);
         Bitboard knightMoves = knightAttacks[from];
+        if (tacticalOnly) {
+            knightMoves &= enemyOccupancy;
+        }
         while (knightMoves) {
             Square to = PopLSB(knightMoves);
             Bitboard newSquareBB = ToBitboard(to);
@@ -205,6 +208,9 @@ std::vector<Move> GenMoves(const Board& board, Color colorToMove) {
         while (pieceBoard) {
             Square from = PopLSB(pieceBoard);
             Bitboard attacks = pieceInfo.Attack(from, occupancy);
+            if (tacticalOnly) {
+                attacks &= enemyOccupancy;
+            }
             while (attacks) {
                 Square to = PopLSB(attacks);
                 Bitboard newSquareBB = ToBitboard(to);
@@ -234,13 +240,16 @@ std::vector<Move> GenMoves(const Board& board, Color colorToMove) {
     }
 
     Bitboard kingMoves = kingAttacks[originalKingSquareIndex];
+    if (tacticalOnly) {
+        kingMoves &= enemyOccupancy;
+    }
     while (kingMoves) {
         Square to = PopLSB(kingMoves);
         Bitboard newSquareBB = ToBitboard(to);
         if ((friendlyOccupancy & newSquareBB) == 0) {
             Board newBoard = board;
             newBoard.Move(PieceType::King, colorToMove, originalKingSquareIndex, to);
-
+            
             PieceType removedPieceType = PieceType::None;
             if (enemyOccupancy & newSquareBB) {
                 removedPieceType = RemovePiece(to, newBoard, opponentColor);
@@ -260,7 +269,7 @@ std::vector<Move> GenMoves(const Board& board, Color colorToMove) {
         }
     }
 
-    if (board.shortCastlingRight[colorToMove]) {
+    if (!tacticalOnly && board.shortCastlingRight[colorToMove]) {
         bool squaresVacant = (occupancy & ((Bitboard)1 << (originalKingSquareIndex + 1))) == 0 &&
                              (occupancy & ((Bitboard)1 << (originalKingSquareIndex + 2))) == 0;
         if (squaresVacant) {
@@ -276,7 +285,7 @@ std::vector<Move> GenMoves(const Board& board, Color colorToMove) {
             }
         }
     }
-    if (board.longCastlingRight[colorToMove]) {
+    if (!tacticalOnly && board.longCastlingRight[colorToMove]) {
         bool squaresVacant = (occupancy & ((Bitboard)1 << (originalKingSquareIndex - 1))) == 0 &&
                              (occupancy & ((Bitboard)1 << (originalKingSquareIndex - 2))) == 0 &&
                              (occupancy & ((Bitboard)1 << (originalKingSquareIndex - 3))) == 0;
