@@ -8,7 +8,9 @@
 #include <bit>
 #include <cassert>
 #include <climits>
+#include <cstddef>
 #include <cstring>
+#include <iterator>
 #include <utility>
 #include <vector>
 
@@ -203,16 +205,28 @@ static int Evaluate(const Board& board, Color color) {
 Move killerMoves[64][2] = {};
 int historyTable[2][64][64] = {};
 std::unordered_map<std::uint64_t, int> threefoldRepetitionTable;
+constexpr int MAX_PLY = 64;
+Move pvTable[MAX_PLY][MAX_PLY];
+int pvLength[MAX_PLY];
+std::vector<Move> principalVariation;
 Move PVmove{};
 bool gUseNewFeature = false;
 bool isRootCall = false;
+constexpr Move NULL_MOVE = Move{};
 
-static int ScoreMove(const Move& move, int depth, Color colorToMove, const Move& ttMove) {
-    if (move == PVmove) {
+static int ScoreMove(const Move& move, int depth, int ply, Color colorToMove, const Move& ttMove, bool followPV) {
+    if (move == ttMove) {
         return 15000;
     }
-    if (move == ttMove) {
-        return 14000;
+    if (gUseNewFeature) {
+        if (followPV && ply < principalVariation.size() && move == principalVariation[ply]) {
+            return 14000;
+        }
+    }
+    else {
+        if (move == PVmove) {
+            return 14000;
+        }
     }
     // TODO: this has to be wrong. Not considering moves that are both promotions and captures
     if (move.capturedPieceType != PieceType::None) {
@@ -221,19 +235,19 @@ static int ScoreMove(const Move& move, int depth, Color colorToMove, const Move&
     if (move.promotionType != PieceType::None) {
         return 10000 + pieceValues[(int)move.promotionType];
     }
-    if (move == killerMoves[depth][0]) {
+    // TODO: use ply for killerMoves
+    if (move == killerMoves[ply][0]) {
         return 9000;
     }
-    if (move == killerMoves[depth][1]) {
+    if (move == killerMoves[ply][1]) {
         return 8000;
     }
     return historyTable[colorToMove][move.from][move.to];
 }
 
-
-static bool MoveComparator(const Move& a, const Move& b, int depth, Color colorToMove, const Move& ttMove) {
-    int aScore = ScoreMove(a, depth, colorToMove, ttMove);
-    int bScore = ScoreMove(b, depth, colorToMove, ttMove);
+static bool MoveComparator(const Move& a, const Move& b, int depth, int ply, Color colorToMove, const Move& ttMove, bool followPV) {
+    int aScore = ScoreMove(a, depth, ply, colorToMove, ttMove, followPV);
+    int bScore = ScoreMove(b, depth, ply, colorToMove, ttMove, followPV);
     return aScore > bScore;
 }
 
@@ -283,18 +297,17 @@ static int Quiesce(Board& board, int depth, Color colorToMove, Color engineColor
         beta = bestScore;
     }
     if (alpha >= beta) {
-        transpositionTable.Add(board, colorToMove, 0, bestScore, engineTurn ? LowerBound : UpperBound, Move{});
+        transpositionTable.Add(board, colorToMove, 0, bestScore, engineTurn ? LowerBound : UpperBound, NULL_MOVE);
         return bestScore;
     }
     if (depth <= -8) { // stand-pat
-        transpositionTable.Add(board, colorToMove, 0, bestScore, Exact, Move{});
+        transpositionTable.Add(board, colorToMove, 0, bestScore, Exact, NULL_MOVE);
         return bestScore;
     }
 
-
     std::vector<Move> tacticalMoves = GenMoves(board, colorToMove, true);
     if (tacticalMoves.empty()) { 
-        transpositionTable.Add(board, colorToMove, 0, bestScore, Exact, Move{});
+        transpositionTable.Add(board, colorToMove, 0, bestScore, Exact, NULL_MOVE);
         return bestScore;
     }
     std::sort(tacticalMoves.begin(), tacticalMoves.end(), [](const Move& a, const Move& b) {
@@ -315,7 +328,7 @@ static int Quiesce(Board& board, int depth, Color colorToMove, Color engineColor
             return aScore > bScore;
     });
     ScoreType scoreType = Exact;
-    Move bestMove = Move{};
+    Move bestMove = NULL_MOVE;
     for (const Move& move : tacticalMoves) {
         auto newBoardHash = boardHash;
         MakeMove(move, board, colorToMove, newBoardHash);
@@ -358,19 +371,19 @@ static int Quiesce(Board& board, int depth, Color colorToMove, Color engineColor
     return bestScore;
 }
 
-static int Minimax(Board& board, int depth, Color colorToMove, Color engineColor, int alpha, int beta, const std::uint64_t boardHash, std::uint64_t maxSearchTime) {
-    bool root = isRootCall;
-    if (isRootCall) {
-        isRootCall = false;
-    }
+static int Minimax(Board& board, int depth, int ply, Color colorToMove, Color engineColor, int alpha, int beta, const std::uint64_t boardHash, std::uint64_t maxSearchTime, bool followPV) {
     --nodeCounter;
     if (nodeCounter <= 0) {
         nodeCounter = NODE_INTERVAL_CHECK;
         // TODO: check shared boolean variable 
-        auto currentTime = TimestampMS();
-        if (currentTime >= maxSearchTime) {
+        if (TimestampMS() >= maxSearchTime) {
             return ABORT_SEARCH_VALUE;
         }
+    }
+    pvLength[ply] = 0;
+    bool root = isRootCall;
+    if (isRootCall) {
+        isRootCall = false;
     }
     bool engineTurn = colorToMove == engineColor;
     const TTEntry* entry = transpositionTable.Search(boardHash);
@@ -390,8 +403,9 @@ static int Minimax(Board& board, int depth, Color colorToMove, Color engineColor
         }
     }
     if (depth == 0) {
-        if (gUseNewFeature) return Quiesce(board, 0, colorToMove, engineColor, alpha, beta, boardHash, maxSearchTime);
-        else return Evaluate(board, engineColor);
+        pvLength[ply + 1] = 0;
+        return Quiesce(board, 0, colorToMove, engineColor, alpha, beta, boardHash, maxSearchTime);
+        // return Evaluate(board, engineColor);
     }
 
     std::vector<Move> moves = GenMoves(board, colorToMove);
@@ -403,8 +417,8 @@ static int Minimax(Board& board, int depth, Color colorToMove, Color engineColor
             return 0;
         }
     }
-    const Move ttMove = entry && gUseNewFeature ? entry->bestMove : Move{};
-    std::sort(moves.begin(), moves.end(), [&](const Move& a, const Move& b){ return MoveComparator(a, b, depth, colorToMove, ttMove); });
+    const Move ttMove = entry ? entry->bestMove : NULL_MOVE;
+    std::sort(moves.begin(), moves.end(), [&](const Move& a, const Move& b){ return MoveComparator(a, b, depth, ply, colorToMove, ttMove, followPV); });
     int bestScore = engineTurn ? INT_MIN : INT_MAX;
     ScoreType scoreType = Exact;
     const Move* bestMove = &moves[0];
@@ -413,16 +427,35 @@ static int Minimax(Board& board, int depth, Color colorToMove, Color engineColor
         MakeMove(move, board, colorToMove, newBoardHash);
         int repetitionCount = ++threefoldRepetitionTable[newBoardHash];
         bool draw = repetitionCount >= 3;
-        int score = draw ? 0 : Minimax(board, depth - 1, ToggleColor(colorToMove), engineColor, alpha, beta, newBoardHash, maxSearchTime);
+        bool childFollowPV = followPV && ply < principalVariation.size() && move == principalVariation[ply];
+        int score = draw ? 0 : Minimax(board, depth - 1, ply + 1, ToggleColor(colorToMove), engineColor, alpha, beta, newBoardHash, maxSearchTime, childFollowPV);
+
+        if (score > alpha && score < beta) {
+            pvTable[ply][0] = move;
+            int n = pvLength[ply + 1];
+            std::copy(pvTable[ply + 1], pvTable[ply + 1] + n, pvTable[ply] + 1);
+            pvLength[ply] = 1 + n;
+        }
+
         UndoMove(move, board, colorToMove);
         --threefoldRepetitionTable[newBoardHash];
         if (score == ABORT_SEARCH_VALUE) {
             // TODO: find a better way to handle PV when a timeout occurs
-            if (root) {
-                if (PVmove == Move{}) {
-                    PVmove = *bestMove;
+            if (true/*!gUseNewFeature*/) {
+                if (root) {
+                    if (PVmove == NULL_MOVE) {
+                        PVmove = *bestMove;
+                    }
                 }
             }
+            else {
+                // TODO: is this needed? moveChain always has something in it
+                // however, principalVariation not always set to moveChain
+                // if (ply == 0 && principalVariation.empty()) {
+                //   principalVariation.push_back(*bestMove);
+                // }
+            }
+
             return ABORT_SEARCH_VALUE;
         }
         if (engineTurn) { 
@@ -434,8 +467,8 @@ static int Minimax(Board& board, int depth, Color colorToMove, Color engineColor
             if (beta <= alpha) {
                 historyTable[colorToMove][move.from][move.to] += depth * depth;
                 if (move.capturedPieceType == PieceType::None) {
-                    killerMoves[depth][1] = killerMoves[depth][0];
-                    killerMoves[depth][0] = move;
+                    killerMoves[ply][1] = killerMoves[ply][0];
+                    killerMoves[ply][0] = move;
                 }
                 scoreType = LowerBound;
                 break;
@@ -450,8 +483,8 @@ static int Minimax(Board& board, int depth, Color colorToMove, Color engineColor
             if (beta <= alpha) {
                 historyTable[colorToMove][move.from][move.to] += depth * depth;
                 if (move.capturedPieceType == PieceType::None) {
-                    killerMoves[depth][1] = killerMoves[depth][0];
-                    killerMoves[depth][0] = move;
+                    killerMoves[ply][1] = killerMoves[ply][0];
+                    killerMoves[ply][0] = move;
                 }
                 scoreType = UpperBound;
                 break;
@@ -468,6 +501,9 @@ Move Search(const Board& board, Color colorToMove, int totalTimeRemaining, int i
     std::uint64_t startTime = TimestampMS();
     std::memset(killerMoves, 0, sizeof(killerMoves));
     std::memset(historyTable, 0, sizeof(historyTable)); 
+    std::memset(pvLength, 0, sizeof(pvLength));
+    std::fill(&pvTable[0][0], &pvTable[0][0] + MAX_PLY * MAX_PLY, NULL_MOVE);
+    principalVariation.clear();
     PVmove = {};
     int searchTime = totalTimeRemaining / 20 + inc / 2;
     if (searchTime > totalTimeRemaining) {
@@ -482,17 +518,30 @@ Move Search(const Board& board, Color colorToMove, int totalTimeRemaining, int i
     int alpha = INT_MIN;
     int beta = INT_MAX;
     int score = 0;
+    
     for (int depth = 1; ;depth++) {
         Board boardCopy = board;
         isRootCall = true;
-        score = Minimax(boardCopy, depth, colorToMove, engineColor, alpha, beta, boardHash, maxSearchTime);
+        score = Minimax(boardCopy, depth, 0, colorToMove, engineColor, alpha, beta, boardHash, maxSearchTime, true);
+        if (true) {
+            const TTEntry* entry = transpositionTable.Search(boardHash);
+            if (entry) {
+                PVmove = entry->bestMove;
+            }
+        }
         if (score == ABORT_SEARCH_VALUE || TimestampMS() >= maxSearchTime) {
             break;
         }
-        const TTEntry* entry = transpositionTable.Search(boardHash);
-        if (entry) {
-            PVmove = entry->bestMove;
+        else {
+            principalVariation.clear();
+            std::copy(pvTable[0], pvTable[0] + pvLength[0], std::back_inserter(principalVariation));
         }
     }
-    return PVmove; 
+    if (gUseNewFeature) {
+        if (principalVariation.empty () && pvLength[0] == 0) {
+            return PVmove;
+        }
+        return principalVariation.empty() ? pvTable[0][0] : principalVariation[0];
+    }
+    else return PVmove; 
 }
