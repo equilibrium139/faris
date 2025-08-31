@@ -14,6 +14,8 @@
 #include <utility>
 #include <vector>
 
+// TODO: factor in 50 move draw rule
+
 // All of these scores from POV of white. Square XOR 56 to get score from black POV
 
 static constexpr std::array<int, 64> pawnScoreTable = {
@@ -216,25 +218,28 @@ constexpr Move NULL_MOVE = Move{};
 
 static int ScoreMove(const Move& move, int depth, int ply, Color colorToMove, const Move& ttMove, bool followPV) {
     if (move == ttMove) {
-        return 15000;
+        return 100'000;
     }
     if (gUseNewFeature) {
         if (followPV && ply < principalVariation.size() && move == principalVariation[ply]) {
-            return 14000;
+            return 50'000;
         }
     }
     else {
         if (move == PVmove) {
-            return 14000;
+            return 50'000;
         }
     }
     // TODO: this has to be wrong. Not considering moves that are both promotions and captures
+    int captureAndPromotionScore = 0;
     if (move.capturedPieceType != PieceType::None) {
-        return 10000 + pieceValues[(int)move.capturedPieceType] - pieceValues[(int)move.type]/10;
+        captureAndPromotionScore += 10000 + pieceValues[(int)move.capturedPieceType] * 16 - pieceValues[(int)move.type];
     }
     if (move.promotionType != PieceType::None) {
-        return 10000 + pieceValues[(int)move.promotionType];
+        captureAndPromotionScore += 10000 + pieceValues[(int)move.promotionType];
     }
+    if (captureAndPromotionScore > 0) return captureAndPromotionScore;
+    
     // TODO: use ply for killerMoves
     if (move == killerMoves[ply][0]) {
         return 9000;
@@ -273,6 +278,8 @@ static int Quiesce(Board& board, int depth, Color colorToMove, Color engineColor
         }
     }
     bool engineTurn = colorToMove == engineColor;
+    const int alphaOrig = alpha;
+    const int betaOrig = beta;
     const TTEntry* entry = transpositionTable.Search(boardHash);
     if (entry &&  entry->depth == 0) {
         if (entry->scoreType == Exact) {
@@ -367,6 +374,12 @@ static int Quiesce(Board& board, int depth, Color colorToMove, Color engineColor
             }
         }
     }
+    if (bestScore <= alphaOrig) {
+        scoreType = UpperBound;
+    }
+    if (bestScore >= betaOrig) {
+        scoreType = LowerBound;
+    }
     transpositionTable.Add(board, colorToMove, 0, bestScore, scoreType, bestMove);
     return bestScore;
 }
@@ -385,6 +398,8 @@ static int Minimax(Board& board, int depth, int ply, Color colorToMove, Color en
     if (isRootCall) {
         isRootCall = false;
     }
+    const int alphaOrig = alpha;
+    const int betaOrig = beta;
     bool engineTurn = colorToMove == engineColor;
     const TTEntry* entry = transpositionTable.Search(boardHash);
     if (entry && entry->depth >= depth) {
@@ -491,11 +506,16 @@ static int Minimax(Board& board, int depth, int ply, Color colorToMove, Color en
             }
         }
     }
+    if (bestScore <= alphaOrig) {
+        scoreType = UpperBound;
+    }
+    if (bestScore >= betaOrig) {
+        scoreType = LowerBound;
+    }
     transpositionTable.Add(board, colorToMove, depth, bestScore, scoreType, *bestMove);
     return bestScore;
 }
 
-// TODO: handle 3-fold repetition draw
 Move Search(const Board& board, Color colorToMove, int totalTimeRemaining, int inc, bool useNewFeature) {
     gUseNewFeature = useNewFeature;
     std::uint64_t startTime = TimestampMS();
@@ -515,19 +535,33 @@ Move Search(const Board& board, Color colorToMove, int totalTimeRemaining, int i
     auto maxSearchTime = startTime + searchTime;
     Color engineColor = colorToMove;
     const auto boardHash = transpositionTable.Hash(board, colorToMove);
-    int alpha = INT_MIN;
-    int beta = INT_MAX;
     int score = 0;
     
     for (int depth = 1; ;depth++) {
-        Board boardCopy = board;
-        isRootCall = true;
-        score = Minimax(boardCopy, depth, 0, colorToMove, engineColor, alpha, beta, boardHash, maxSearchTime, true);
-        if (true) {
-            const TTEntry* entry = transpositionTable.Search(boardHash);
-            if (entry) {
-                PVmove = entry->bestMove;
+        int alpha = INT_MIN;
+        int beta = INT_MAX;
+        int delta = 50;
+        if (useNewFeature && depth > 1) {
+            alpha = score - delta;
+            beta = score + delta;
+            while (true) {
+                Board boardCopy = board;
+                isRootCall = true;
+                score = Minimax(boardCopy, depth, 0, colorToMove, engineColor, alpha, beta, boardHash, maxSearchTime, true);
+                if (score == ABORT_SEARCH_VALUE) break;
+                if (score <= alpha) { alpha -= delta; delta *= 2; continue; }
+                if (score >= beta) { beta += delta; delta *= 2; continue; }
+                break;
             }
+        }
+        else {
+            Board boardCopy = board;
+            isRootCall = true;
+            score = Minimax(boardCopy, depth, 0, colorToMove, engineColor, alpha, beta, boardHash, maxSearchTime, true);
+        }
+        const TTEntry* entry = transpositionTable.Search(boardHash);
+        if (entry) {
+            PVmove = entry->bestMove;
         }
         if (score == ABORT_SEARCH_VALUE || TimestampMS() >= maxSearchTime) {
             break;
