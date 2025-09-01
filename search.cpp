@@ -417,8 +417,9 @@ static int Minimax(Board& board, int depth, int ply, Color colorToMove, Color en
     }
 
     std::vector<Move> moves = GenMoves(board, colorToMove);
+    bool inCheck = InCheck(board, colorToMove);
     if (moves.empty()) { 
-        if (InCheck(board, colorToMove)) { // checkmate
+        if (inCheck) { // checkmate
             return engineTurn ? -1'000'000 - depth : 1'000'000 + depth;
         }
         else { // stalemate
@@ -426,6 +427,33 @@ static int Minimax(Board& board, int depth, int ply, Color colorToMove, Color en
         }
     }
     const bool pvNode = (beta - alpha) > 1;
+    bool enableNMP = !inCheck && depth > 3;
+    if (enableNMP) {
+        Bitboard nonKingNonPawnBB = (board.Occupancy(colorToMove) & ~board.Pawns(colorToMove) & ~board.Kings(colorToMove));
+        bool pawnEndgame = nonKingNonPawnBB == 0;
+        enableNMP = !pawnEndgame;
+    }
+    if (gUseNewFeature && enableNMP) {
+        int R = 2;
+        if (depth > 6) R = 3;
+
+        int a = alpha;
+        int b = beta;
+        if (engineTurn) a = b - 1;
+        else b = a + 1;
+        auto newBoardHash = boardHash ^ transpositionTable.blackToMoveZobrist;
+        auto originalEP = board.enPassant;
+        if (board.enPassant != -1) {
+            newBoardHash ^= transpositionTable.enPassantFileZobrist[board.enPassant & 0x7];
+            board.enPassant = -1;
+        }
+        int nullScore = Minimax(board, depth - R, ply + 1, ToggleColor(colorToMove), engineColor, a, b, newBoardHash, maxSearchTime, false);
+        board.enPassant = originalEP; 
+        if (nullScore == ABORT_SEARCH_VALUE) return ABORT_SEARCH_VALUE;
+        if (engineTurn ? nullScore >= b : nullScore <= a){
+            return nullScore;
+        }
+    }
     const Move ttMove = entry ? entry->bestMove : NULL_MOVE;
     std::sort(moves.begin(), moves.end(), [&](const Move& a, const Move& b){ return MoveComparator(a, b, depth, ply, colorToMove, ttMove, followPV); });
     int bestScore = engineTurn ? -INF_SCORE : INF_SCORE;
@@ -439,7 +467,7 @@ static int Minimax(Board& board, int depth, int ply, Color colorToMove, Color en
         bool draw = repetitionCount >= 3;
         bool childFollowPV = followPV && ply < principalVariation.size() && move == principalVariation[ply];
 
-        bool fullWindow = !gUseNewFeature || !pvNode || i == 0;
+        bool fullWindow = !pvNode || i == 0;
         int score;
         if (draw) score = 0;
         else if (!fullWindow) {
