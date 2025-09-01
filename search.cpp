@@ -215,22 +215,16 @@ Move PVmove{};
 bool gUseNewFeature = false;
 bool isRootCall = false;
 constexpr Move NULL_MOVE = Move{};
+constexpr int INF_SCORE = 2'000'000;
 
 static int ScoreMove(const Move& move, int depth, int ply, Color colorToMove, const Move& ttMove, bool followPV) {
     if (move == ttMove) {
         return 100'000;
     }
-    if (gUseNewFeature) {
-        if (followPV && ply < principalVariation.size() && move == principalVariation[ply]) {
-            return 50'000;
-        }
+    if (followPV && ply < principalVariation.size() && move == principalVariation[ply]) {
+        return 50'000;
     }
-    else {
-        if (move == PVmove) {
-            return 50'000;
-        }
-    }
-    // TODO: this has to be wrong. Not considering moves that are both promotions and captures
+    
     int captureAndPromotionScore = 0;
     if (move.capturedPieceType != PieceType::None) {
         captureAndPromotionScore += 10000 + pieceValues[(int)move.capturedPieceType] * 16 - pieceValues[(int)move.type];
@@ -258,7 +252,7 @@ static bool MoveComparator(const Move& a, const Move& b, int depth, int ply, Col
 
 static constexpr int NODE_INTERVAL_CHECK = 4096;
 static int nodeCounter = NODE_INTERVAL_CHECK;
-static constexpr int ABORT_SEARCH_VALUE = INT_MAX;
+static constexpr int ABORT_SEARCH_VALUE = INF_SCORE * 2;
 
 static std::uint64_t TimestampMS() {
     auto now = std::chrono::system_clock::now();
@@ -420,30 +414,46 @@ static int Minimax(Board& board, int depth, int ply, Color colorToMove, Color en
     if (depth == 0) {
         pvLength[ply + 1] = 0;
         return Quiesce(board, 0, colorToMove, engineColor, alpha, beta, boardHash, maxSearchTime);
-        // return Evaluate(board, engineColor);
     }
 
     std::vector<Move> moves = GenMoves(board, colorToMove);
     if (moves.empty()) { 
         if (InCheck(board, colorToMove)) { // checkmate
-            return engineTurn ? -1000000 - depth : 1000000 + depth;
+            return engineTurn ? -1'000'000 - depth : 1'000'000 + depth;
         }
         else { // stalemate
             return 0;
         }
     }
+    const bool pvNode = (beta - alpha) > 1;
     const Move ttMove = entry ? entry->bestMove : NULL_MOVE;
     std::sort(moves.begin(), moves.end(), [&](const Move& a, const Move& b){ return MoveComparator(a, b, depth, ply, colorToMove, ttMove, followPV); });
-    int bestScore = engineTurn ? INT_MIN : INT_MAX;
+    int bestScore = engineTurn ? -INF_SCORE : INF_SCORE;
     ScoreType scoreType = Exact;
     const Move* bestMove = &moves[0];
-    for (const Move& move : moves) {
+    for (int i = 0; i < moves.size(); i++) {
+        const Move& move = moves[i];
         auto newBoardHash = boardHash;
         MakeMove(move, board, colorToMove, newBoardHash);
         int repetitionCount = ++threefoldRepetitionTable[newBoardHash];
         bool draw = repetitionCount >= 3;
         bool childFollowPV = followPV && ply < principalVariation.size() && move == principalVariation[ply];
-        int score = draw ? 0 : Minimax(board, depth - 1, ply + 1, ToggleColor(colorToMove), engineColor, alpha, beta, newBoardHash, maxSearchTime, childFollowPV);
+
+        bool fullWindow = !gUseNewFeature || !pvNode || i == 0;
+        int score;
+        if (draw) score = 0;
+        else if (!fullWindow) {
+            int a = alpha;
+            int b = beta;
+            if (engineTurn) b = a + 1;
+            else a = b - 1;
+            score = Minimax(board, depth - 1, ply + 1, ToggleColor(colorToMove), engineColor, a, b, newBoardHash, maxSearchTime, childFollowPV);
+            if (score == ABORT_SEARCH_VALUE) goto abort;
+            if (pvNode && (engineTurn ? score > a : score < b)) {
+                score = Minimax(board, depth - 1, ply + 1, ToggleColor(colorToMove), engineColor, alpha, beta, newBoardHash, maxSearchTime, childFollowPV);
+            }
+        }
+        else score = Minimax(board, depth - 1, ply + 1, ToggleColor(colorToMove), engineColor, alpha, beta, newBoardHash, maxSearchTime, childFollowPV);
 
         if (score > alpha && score < beta) {
             pvTable[ply][0] = move;
@@ -452,25 +462,16 @@ static int Minimax(Board& board, int depth, int ply, Color colorToMove, Color en
             pvLength[ply] = 1 + n;
         }
 
+abort:
         UndoMove(move, board, colorToMove);
         --threefoldRepetitionTable[newBoardHash];
         if (score == ABORT_SEARCH_VALUE) {
             // TODO: find a better way to handle PV when a timeout occurs
-            if (true/*!gUseNewFeature*/) {
-                if (root) {
-                    if (PVmove == NULL_MOVE) {
-                        PVmove = *bestMove;
-                    }
+            if (root) {
+                if (PVmove == NULL_MOVE) {
+                    PVmove = *bestMove;
                 }
             }
-            else {
-                // TODO: is this needed? moveChain always has something in it
-                // however, principalVariation not always set to moveChain
-                // if (ply == 0 && principalVariation.empty()) {
-                //   principalVariation.push_back(*bestMove);
-                // }
-            }
-
             return ABORT_SEARCH_VALUE;
         }
         if (engineTurn) { 
@@ -538,10 +539,10 @@ Move Search(const Board& board, Color colorToMove, int totalTimeRemaining, int i
     int score = 0;
     
     for (int depth = 1; ;depth++) {
-        int alpha = INT_MIN;
-        int beta = INT_MAX;
+        int alpha = -INF_SCORE;
+        int beta = INF_SCORE;
         int delta = 50;
-        if (useNewFeature && depth > 1) {
+        if (depth > 1) {
             alpha = score - delta;
             beta = score + delta;
             while (true) {
@@ -571,11 +572,8 @@ Move Search(const Board& board, Color colorToMove, int totalTimeRemaining, int i
             std::copy(pvTable[0], pvTable[0] + pvLength[0], std::back_inserter(principalVariation));
         }
     }
-    if (gUseNewFeature) {
-        if (principalVariation.empty () && pvLength[0] == 0) {
-            return PVmove;
-        }
-        return principalVariation.empty() ? pvTable[0][0] : principalVariation[0];
+    if (principalVariation.empty () && pvLength[0] == 0) {
+        return PVmove;
     }
-    else return PVmove; 
+    return principalVariation.empty() ? pvTable[0][0] : principalVariation[0];
 }
