@@ -1,6 +1,8 @@
 #include "search.h"
+#include "attack_bitboards.h"
 #include "board.h"
 #include <chrono>
+#include "magic.h"
 #include "movegen.h"
 #include "transposition.h"
 #include "utilities.h"
@@ -143,6 +145,33 @@ static int ComputePositionalScore(Bitboard bb, const std::array<int, 64>& scoreT
     return score;
 }
 
+static int ComputeMobilityScore(Bitboard occupancy, Bitboard knights, Bitboard bishops, Bitboard rooks, Bitboard queens) {
+    int mobility = 0;
+    while (knights) {
+        Square knight = PopLSB(knights);
+        Bitboard moves = knightAttacks[knight];
+        mobility += std::popcount(moves);
+    }
+    while (bishops) {
+        Square bishop = PopLSB(bishops);
+        Bitboard moves = BishopAttack(bishop, occupancy);
+        mobility += std::popcount(moves);
+    }
+    while (rooks) {
+        Square rook = PopLSB(rooks);
+        Bitboard moves = RookAttack(rook, occupancy);
+        mobility += std::popcount(moves);
+    }
+    while (queens) {
+        Square queen = PopLSB(queens);
+        Bitboard moves = QueenAttack(queen, occupancy);
+        mobility += std::popcount(moves);
+    }
+    return mobility;
+}
+
+bool gUseNewFeature = false;
+
 static int Evaluate(const Board& board, Color color) {
     Bitboard pawnBB = board.bitboards2D[color][PAWN_OFFSET];
     Bitboard knightBB = board.bitboards2D[color][KNIGHT_OFFSET];
@@ -183,6 +212,14 @@ static int Evaluate(const Board& board, Color color) {
     
     // TODO: could compute mobility for sliding pieces and knights by bitwise ANDing the attack board with inverse friendly occupancy
     // might be expensive
+    
+    int mobilityScore = 0;
+    if (gUseNewFeature) {
+         mobilityScore = ComputeMobilityScore(occupancy, knightBB, bishopBB, rookBB, queenBB);
+         int oppMobilityScore = ComputeMobilityScore(occupancy, oppKnightBB, oppBishopBB, oppRookBB, oppQueenBB);
+         mobilityScore -= oppMobilityScore;
+    }
+
     int pawnStructureScore = -50 * (doubled - oppDoubled + blocked - oppBlocked + isolated - oppIsolated);
     
     bool black = color == Black;
@@ -201,7 +238,7 @@ static int Evaluate(const Board& board, Color color) {
     int positionalScore = pawnPosScore - oppPawnPosScore + knightPosScore - oppKnightPosScore + bishopPosScore - oppBishopPosScore + 
                           rookPosScore - oppRookPosScore + queenPosScore - oppQueenPosScore;
 
-    return materialScore + pawnStructureScore + positionalScore;
+    return materialScore + pawnStructureScore + positionalScore + gUseNewFeature * mobilityScore;
 }
 
 Move killerMoves[64][2] = {};
@@ -212,7 +249,6 @@ Move pvTable[MAX_PLY][MAX_PLY];
 int pvLength[MAX_PLY];
 std::vector<Move> principalVariation;
 Move PVmove{};
-bool gUseNewFeature = false;
 bool isRootCall = false;
 constexpr Move NULL_MOVE = Move{};
 constexpr int INF_SCORE = 2'000'000;
@@ -433,7 +469,7 @@ static int Minimax(Board& board, int depth, int ply, Color colorToMove, Color en
         bool pawnEndgame = nonKingNonPawnBB == 0;
         enableNMP = !pawnEndgame;
     }
-    if (gUseNewFeature && enableNMP) {
+    if (enableNMP) {
         int R = 2;
         if (depth > 6) R = 3;
 
