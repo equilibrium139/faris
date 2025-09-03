@@ -214,11 +214,9 @@ static int Evaluate(const Board& board, Color color) {
     // might be expensive
     
     int mobilityScore = 0;
-    if (gUseNewFeature) {
-         mobilityScore = ComputeMobilityScore(occupancy, knightBB, bishopBB, rookBB, queenBB);
-         int oppMobilityScore = ComputeMobilityScore(occupancy, oppKnightBB, oppBishopBB, oppRookBB, oppQueenBB);
-         mobilityScore -= oppMobilityScore;
-    }
+    mobilityScore = ComputeMobilityScore(occupancy, knightBB, bishopBB, rookBB, queenBB);
+    int oppMobilityScore = ComputeMobilityScore(occupancy, oppKnightBB, oppBishopBB, oppRookBB, oppQueenBB);
+    mobilityScore -= oppMobilityScore;
 
     int pawnStructureScore = -50 * (doubled - oppDoubled + blocked - oppBlocked + isolated - oppIsolated);
     
@@ -238,7 +236,7 @@ static int Evaluate(const Board& board, Color color) {
     int positionalScore = pawnPosScore - oppPawnPosScore + knightPosScore - oppKnightPosScore + bishopPosScore - oppBishopPosScore + 
                           rookPosScore - oppRookPosScore + queenPosScore - oppQueenPosScore;
 
-    return materialScore + pawnStructureScore + positionalScore + gUseNewFeature * mobilityScore;
+    return materialScore + pawnStructureScore + positionalScore + mobilityScore;
 }
 
 int historyTable[2][64][64] = {};
@@ -279,7 +277,7 @@ static int ScoreMove(const Move& move, int depth, int ply, Color colorToMove, co
         return 8000;
     }
     if (gUseNewFeature && move == counterMoves[prevMoveFrom][prevMoveTo]) {
-        return 7000;
+        return historyTable[colorToMove][move.from][move.to] + 7000;
     }
     return historyTable[colorToMove][move.from][move.to];
 }
@@ -521,7 +519,7 @@ static int Minimax(Board& board, int depth, int ply, Color colorToMove, Color en
             int b = beta;
             if (engineTurn) b = a + 1;
             else a = b - 1;
-            if (gUseNewFeature && enableLMR && i > 3 && !childFollowPV) {
+            if (false && enableLMR && i > 3 && !childFollowPV) {
                 bool tacticalMove = move.capturedPieceType != PieceType::None || move.promotionType != PieceType::None;
                 if (!tacticalMove) {
                     int reduc = 2;
